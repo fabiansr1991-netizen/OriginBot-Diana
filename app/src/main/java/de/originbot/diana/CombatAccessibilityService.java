@@ -24,6 +24,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   private WindowManager windowManager;
   private Button overlayButton;
   private Button dodgeMarker;
+  private Button dodgeTestButton;
   private WindowManager.LayoutParams markerParams;
   private int screenW, screenH;
 
@@ -55,6 +56,9 @@ public class CombatAccessibilityService extends AccessibilityService {
       if (running) {
         stopCombat();
       } else {
+        DisplayMetrics currentMetrics = new DisplayMetrics();
+        windowManager.getDefaultDisplay().getRealMetrics(currentMetrics);
+        screenW = currentMetrics.widthPixels; screenH = currentMetrics.heightPixels;
         float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.70f);
         float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.80f);
         startCombat(screenW * 0.83f, screenH * 0.80f,
@@ -74,6 +78,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     try {
       windowManager.addView(overlayButton, params);
       showDodgeMarker();
+      showDodgeTestButton();
     } catch (RuntimeException e) {
       overlayButton = null;
     }
@@ -124,10 +129,46 @@ public class CombatAccessibilityService extends AccessibilityService {
     windowManager.addView(dodgeMarker, markerParams);
   }
 
+  private void showDodgeTestButton() {
+    dodgeTestButton = new Button(this);
+    dodgeTestButton.setText("AUSWEICH TEST");
+    dodgeTestButton.setAllCaps(false);
+    dodgeTestButton.setOnClickListener(v -> {
+      if (running) return;
+      if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
+      if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
+      float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.70f);
+      float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.80f);
+      DisplayMetrics metrics = new DisplayMetrics();
+      windowManager.getDefaultDisplay().getRealMetrics(metrics);
+      handler.postDelayed(() -> {
+        tap(metrics.widthPixels * fx, metrics.heightPixels * fy);
+        handler.postDelayed(() -> {
+          if (!running && dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
+          if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
+        }, 500);
+      }, 200);
+    });
+    WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+      WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+      PixelFormat.TRANSLUCENT);
+    p.gravity = Gravity.TOP | Gravity.END;
+    p.x = 12;
+    p.y = 270;
+    windowManager.addView(dodgeTestButton, p);
+  }
+
   @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
   @Override public void onInterrupt() { stopCombat(); }
   @Override public void onDestroy() {
     stopCombat();
+    if (windowManager != null && dodgeTestButton != null) {
+      windowManager.removeView(dodgeTestButton);
+      dodgeTestButton = null;
+    }
     if (windowManager != null && dodgeMarker != null) {
       windowManager.removeView(dodgeMarker);
       dodgeMarker = null;
@@ -147,6 +188,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     running = true;
     updateOverlay();
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
+    if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
     handler.post(loop);
   }
 
@@ -154,6 +196,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     running = false;
     handler.removeCallbacks(loop);
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
+    if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
     updateOverlay();
   }
 
