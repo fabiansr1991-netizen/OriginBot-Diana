@@ -29,6 +29,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean screenshotPending;
   private boolean warningPreviouslyVisible;
   private int warningFrames;
+  private long lastWarningAt;
   private final Runnable scanLoop = new Runnable() {
     @Override public void run() {
       if (!running || Build.VERSION.SDK_INT < 30 || screenshotPending) return;
@@ -37,11 +38,16 @@ public class CombatAccessibilityService extends AccessibilityService {
         @Override public void onSuccess(ScreenshotResult result) {
           screenshotPending = false;
           Bitmap frame = null;
+          Bitmap readable = null;
           try {
             frame = Bitmap.wrapHardwareBuffer(result.getHardwareBuffer(), result.getColorSpace());
-            if (frame != null) analyzeFrame(frame);
+            if (frame != null) {
+              readable = frame.copy(Bitmap.Config.ARGB_8888, false);
+              if (readable != null) analyzeFrame(readable);
+            }
           } catch (RuntimeException ignored) {
           } finally {
+            if (readable != null) readable.recycle();
             if (frame != null) frame.recycle();
             result.getHardwareBuffer().close();
             scheduleScan();
@@ -70,9 +76,10 @@ public class CombatAccessibilityService extends AccessibilityService {
         samples++;
       }
     }
-    boolean warning = samples > 0 && hits > 28 && hits * 100 > samples * 3;
+    boolean warning = samples > 0 && hits > 12 && hits * 100 > samples;
     warningFrames = warning ? Math.min(3, warningFrames + 1) : 0;
-    if (warningFrames >= 2 && !warningPreviouslyVisible) {
+    if (warningFrames >= 1 && SystemClock.uptimeMillis() - lastWarningAt > 900L) {
+      lastWarningAt = SystemClock.uptimeMillis();
       warningPreviouslyVisible = true;
       onIncomingAttackDetected();
     }
@@ -266,6 +273,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     stopCombat();
     attackX = ax; attackY = ay; dodgeX = dx; dodgeY = dy;
     lastDodgeAt = 0L;
+    lastWarningAt = 0L;
     warningFrames = 0;
     warningPreviouslyVisible = false;
     running = true;
