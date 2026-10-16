@@ -21,7 +21,8 @@ public class CombatAccessibilityService extends AccessibilityService {
   static CombatAccessibilityService instance;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private boolean running;
-  private int step;
+  private long lastDodgeAt;
+  private static final long DODGE_COOLDOWN_MS = 850L;
   private float attackX, attackY, dodgeX, dodgeY;
   private WindowManager windowManager;
   private Button overlayButton;
@@ -52,9 +53,8 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final Runnable loop = new Runnable() {
     @Override public void run() {
       if (!running) return;
-      boolean dodge = (++step % 5 == 0);
-      tap(dodge ? dodgeX : attackX, dodge ? dodgeY : attackY);
-      if (running) handler.postDelayed(this, dodge ? 1100 : 650);
+      tap(attackX, attackY);
+      if (running) handler.postDelayed(this, 650);
     }
   };
 
@@ -117,8 +117,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     dodgeMarker.setMinimumHeight(0);
     dodgeMarker.setPadding(6, 2, 6, 2);
     dodgeMarker.setAllCaps(false);
-    float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.90f);
-    float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.88f);
+    float fx = getPreferences(MODE_PRIVATE).getFloat(keyX(), 0.90f);
+    float fy = getPreferences(MODE_PRIVATE).getFloat(keyY(), 0.88f);
     markerParams = new WindowManager.LayoutParams(
       WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.WRAP_CONTENT,
@@ -209,7 +209,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   public void startCombat(float ax, float ay, float dx, float dy) {
     stopCombat();
     attackX = ax; attackY = ay; dodgeX = dx; dodgeY = dy;
-    step = 0;
+    lastDodgeAt = 0L;
     running = true;
     updateOverlay();
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
@@ -230,6 +230,17 @@ public class CombatAccessibilityService extends AccessibilityService {
   }
 
   public boolean isRunning() { return running; }
+
+  /** Called by a future screen-analysis module only after an attack warning is detected. */
+  public void onIncomingAttackDetected() {
+    if (!running) return;
+    long now = android.os.SystemClock.uptimeMillis();
+    if (now - lastDodgeAt < DODGE_COOLDOWN_MS) return;
+    lastDodgeAt = now;
+    handler.removeCallbacks(loop);
+    tap(dodgeX, dodgeY);
+    handler.postDelayed(loop, 350);
+  }
 
   private void tapWithFeedback(float x, float y) {
     sendTap(x, y, true);
