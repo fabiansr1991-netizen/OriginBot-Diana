@@ -72,9 +72,9 @@ public class CombatAccessibilityService extends AccessibilityService {
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT
     );
-    params.gravity = Gravity.TOP | Gravity.END;
-    params.x = 12;
-    params.y = 150;
+    params.gravity = Gravity.TOP | Gravity.LEFT;
+    params.x = 8;
+    params.y = 24;
     try {
       windowManager.addView(overlayButton, params);
       showDodgeMarker();
@@ -90,7 +90,13 @@ public class CombatAccessibilityService extends AccessibilityService {
 
   private void showDodgeMarker() {
     dodgeMarker = new Button(this);
-    dodgeMarker.setText("AUSWEICH\nVERSCHIEBEN");
+    dodgeMarker.setText("ZIEL");
+    dodgeMarker.setTextSize(10);
+    dodgeMarker.setMinWidth(0);
+    dodgeMarker.setMinimumWidth(0);
+    dodgeMarker.setMinHeight(0);
+    dodgeMarker.setMinimumHeight(0);
+    dodgeMarker.setPadding(6, 2, 6, 2);
     dodgeMarker.setAllCaps(false);
     float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.70f);
     float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.80f);
@@ -101,8 +107,8 @@ public class CombatAccessibilityService extends AccessibilityService {
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT);
     markerParams.gravity = Gravity.TOP | Gravity.LEFT;
-    markerParams.x = (int)(screenW * fx) - 75;
-    markerParams.y = (int)(screenH * fy) - 55;
+    markerParams.x = (int)(screenW * fx) - 25;
+    markerParams.y = (int)(screenH * fy) - 20;
     dodgeMarker.setOnTouchListener(new View.OnTouchListener() {
       float downX, downY;
       int startX, startY;
@@ -155,9 +161,9 @@ public class CombatAccessibilityService extends AccessibilityService {
       WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT);
-    p.gravity = Gravity.TOP | Gravity.END;
-    p.x = 12;
-    p.y = 270;
+    p.gravity = Gravity.TOP | Gravity.LEFT;
+    p.x = 8;
+    p.y = 110;
     windowManager.addView(dodgeTestButton, p);
   }
 
