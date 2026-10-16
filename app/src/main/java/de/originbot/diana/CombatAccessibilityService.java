@@ -59,8 +59,8 @@ public class CombatAccessibilityService extends AccessibilityService {
         DisplayMetrics currentMetrics = new DisplayMetrics();
         windowManager.getDefaultDisplay().getRealMetrics(currentMetrics);
         screenW = currentMetrics.widthPixels; screenH = currentMetrics.heightPixels;
-        float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.70f);
-        float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.80f);
+        float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.90f);
+        float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.88f);
         startCombat(screenW * 0.83f, screenH * 0.80f,
                     screenW * fx, screenH * fy);
       }
@@ -98,8 +98,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     dodgeMarker.setMinimumHeight(0);
     dodgeMarker.setPadding(6, 2, 6, 2);
     dodgeMarker.setAllCaps(false);
-    float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.70f);
-    float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.80f);
+    float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.90f);
+    float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.88f);
     markerParams = new WindowManager.LayoutParams(
       WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.WRAP_CONTENT,
@@ -143,8 +143,8 @@ public class CombatAccessibilityService extends AccessibilityService {
       if (running) return;
       if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
       if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
-      float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.70f);
-      float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.80f);
+      float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.90f);
+      float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.88f);
       DisplayMetrics metrics = new DisplayMetrics();
       windowManager.getDefaultDisplay().getRealMetrics(metrics);
       handler.postDelayed(() -> {
