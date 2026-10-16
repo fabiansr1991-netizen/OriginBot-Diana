@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
+import android.content.res.Configuration;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
@@ -28,6 +29,25 @@ public class CombatAccessibilityService extends AccessibilityService {
   private Button dodgeTestButton;
   private WindowManager.LayoutParams markerParams;
   private int screenW, screenH;
+  private String keyX() { return screenW > screenH ? "dodgeLandscapeX" : "dodgePortraitX"; }
+  private String keyY() { return screenW > screenH ? "dodgeLandscapeY" : "dodgePortraitY"; }
+  private void refreshScreen() {
+    DisplayMetrics m = new DisplayMetrics();
+    windowManager.getDefaultDisplay().getRealMetrics(m);
+    screenW = m.widthPixels;
+    screenH = m.heightPixels;
+  }
+  @Override public void onConfigurationChanged(Configuration config) {
+    super.onConfigurationChanged(config);
+    if (windowManager == null) return;
+    refreshScreen();
+    if (running) stopCombat();
+    if (dodgeMarker != null && markerParams != null) {
+      markerParams.x = Math.max(0, Math.round(screenW * getPreferences(MODE_PRIVATE).getFloat(keyX(), 0.90f)) - dodgeMarker.getWidth() / 2);
+      markerParams.y = Math.max(0, Math.round(screenH * getPreferences(MODE_PRIVATE).getFloat(keyY(), 0.88f)) - dodgeMarker.getHeight() / 2);
+      windowManager.updateViewLayout(dodgeMarker, markerParams);
+    }
+  }
 
   private final Runnable loop = new Runnable() {
     @Override public void run() {
@@ -57,11 +77,9 @@ public class CombatAccessibilityService extends AccessibilityService {
       if (running) {
         stopCombat();
       } else {
-        DisplayMetrics currentMetrics = new DisplayMetrics();
-        windowManager.getDefaultDisplay().getRealMetrics(currentMetrics);
-        screenW = currentMetrics.widthPixels; screenH = currentMetrics.heightPixels;
-        float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.90f);
-        float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.88f);
+        refreshScreen();
+        float fx = getPreferences(MODE_PRIVATE).getFloat(keyX(), 0.90f);
+        float fy = getPreferences(MODE_PRIVATE).getFloat(keyY(), 0.88f);
         startCombat(screenW * 0.83f, screenH * 0.80f,
                     screenW * fx, screenH * fy);
       }
@@ -127,7 +145,7 @@ public class CombatAccessibilityService extends AccessibilityService {
           case MotionEvent.ACTION_UP:
             float x = (markerParams.x + dodgeMarker.getWidth() / 2f) / screenW;
             float y = (markerParams.y + dodgeMarker.getHeight() / 2f) / screenH;
-            getPreferences(MODE_PRIVATE).edit().putFloat("dodgeX", x).putFloat("dodgeY", y).apply();
+            getPreferences(MODE_PRIVATE).edit().putFloat(keyX(), x).putFloat(keyY(), y).apply();
             return true;
           default: return true;
         }
@@ -146,10 +164,10 @@ public class CombatAccessibilityService extends AccessibilityService {
       if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
       float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.90f);
       float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.88f);
-      DisplayMetrics metrics = new DisplayMetrics();
-      windowManager.getDefaultDisplay().getRealMetrics(metrics);
+      refreshScreen();
+      final float x = screenW * fx, y = screenH * fy;
       handler.postDelayed(() -> {
-        tapWithFeedback(metrics.widthPixels * fx, metrics.heightPixels * fy);
+        tapWithFeedback(x, y);
         handler.postDelayed(() -> {
           if (!running && dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
           if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
