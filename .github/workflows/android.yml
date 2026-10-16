@@ -10,25 +10,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
-      - name: Java 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install Android API 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Setup Gradle 8.9
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "sdk.dir=$SDK" > local.properties
+          ls -la "$SDK"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-          cache-disabled: true
-      - name: Build debug APK
-        run: gradle --stacktrace --no-daemon :app:assembleDebug
-      - name: Upload APK
+      - name: Build and save diagnostic log
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --version
+          gradle --no-daemon --stacktrace --info :app:assembleDebug 2>&1 | tee build-log.txt
+      - name: Upload diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OriginBot-Diana-build-log
+          path: build-log.txt
+          if-no-files-found: ignore
+      - name: Upload installable APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: OriginBot-Diana-debug-apk
