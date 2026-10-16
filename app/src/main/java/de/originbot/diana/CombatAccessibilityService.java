@@ -182,8 +182,8 @@ public class CombatAccessibilityService extends AccessibilityService {
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT);
     markerParams.gravity = Gravity.TOP | Gravity.LEFT;
-    markerParams.x = (int)(screenW * fx) - 25;
-    markerParams.y = (int)(screenH * fy) - 20;
+    markerParams.x = Math.round(screenW * fx) - 25;
+    markerParams.y = Math.round(screenH * fy) - 20;
     dodgeMarker.setOnTouchListener(new View.OnTouchListener() {
       float downX, downY;
       int startX, startY;
@@ -216,19 +216,19 @@ public class CombatAccessibilityService extends AccessibilityService {
     dodgeTestButton.setAllCaps(false);
     dodgeTestButton.setOnClickListener(v -> {
       if (running) return;
+      refreshScreen();
+      // Use the actual draggable marker center, avoiding stale preferences and rounding.
+      final float x = dodgeMarker == null ? screenW * 0.90f : markerParams.x + dodgeMarker.getWidth() / 2f;
+      final float y = dodgeMarker == null ? screenH * 0.88f : markerParams.y + dodgeMarker.getHeight() / 2f;
       if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
       if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
-      float fx = getPreferences(MODE_PRIVATE).getFloat(keyX(), 0.90f);
-      float fy = getPreferences(MODE_PRIVATE).getFloat(keyY(), 0.88f);
-      refreshScreen();
-      final float x = screenW * fx, y = screenH * fy;
       handler.postDelayed(() -> {
         tapWithFeedback(x, y);
         handler.postDelayed(() -> {
           if (!running && dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
           if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
         }, 500);
-      }, 200);
+      }, 350);
     });
     WindowManager.LayoutParams p = new WindowManager.LayoutParams(
       WindowManager.LayoutParams.WRAP_CONTENT,
