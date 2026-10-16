@@ -3,6 +3,10 @@ package de.originbot.diana;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.graphics.Path;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.SystemClock;
 import android.graphics.PixelFormat;
 import android.content.res.Configuration;
 import android.os.Handler;
@@ -22,6 +26,58 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final Handler handler = new Handler(Looper.getMainLooper());
   private boolean running;
   private long lastDodgeAt;
+  private boolean screenshotPending;
+  private boolean warningPreviouslyVisible;
+  private int warningFrames;
+  private final Runnable scanLoop = new Runnable() {
+    @Override public void run() {
+      if (!running || Build.VERSION.SDK_INT < 30 || screenshotPending) return;
+      screenshotPending = true;
+      takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
+        @Override public void onSuccess(ScreenshotResult result) {
+          screenshotPending = false;
+          Bitmap frame = null;
+          try {
+            frame = Bitmap.wrapHardwareBuffer(result.getHardwareBuffer(), result.getColorSpace());
+            if (frame != null) analyzeFrame(frame);
+          } catch (RuntimeException ignored) {
+          } finally {
+            if (frame != null) frame.recycle();
+            result.getHardwareBuffer().close();
+            scheduleScan();
+          }
+        }
+        @Override public void onFailure(int errorCode) {
+          screenshotPending = false;
+          scheduleScan();
+        }
+      });
+    }
+  };
+  private void scheduleScan() {
+    if (running && Build.VERSION.SDK_INT >= 30) handler.postDelayed(scanLoop, 160);
+  }
+  private void analyzeFrame(Bitmap frame) {
+    if (!running) return;
+    int w = frame.getWidth(), h = frame.getHeight();
+    int hits = 0, samples = 0;
+    // Central battlefield only: exclude red HP bars and action buttons at the edges.
+    for (int y = h * 38 / 100; y < h * 82 / 100; y += Math.max(3, h / 85)) {
+      for (int x = w * 23 / 100; x < w * 76 / 100; x += Math.max(3, w / 115)) {
+        int c = frame.getPixel(x, y);
+        int r = Color.red(c), g = Color.green(c), b = Color.blue(c);
+        if (r > 155 && r > g * 1.75f && r > b * 1.55f && g < 135) hits++;
+        samples++;
+      }
+    }
+    boolean warning = samples > 0 && hits > 28 && hits * 100 > samples * 3;
+    warningFrames = warning ? Math.min(3, warningFrames + 1) : 0;
+    if (warningFrames >= 2 && !warningPreviouslyVisible) {
+      warningPreviouslyVisible = true;
+      onIncomingAttackDetected();
+    }
+    if (!warning) warningPreviouslyVisible = false;
+  }
   private static final long DODGE_COOLDOWN_MS = 850L;
   private float attackX, attackY, dodgeX, dodgeY;
   private WindowManager windowManager;
@@ -162,8 +218,8 @@ public class CombatAccessibilityService extends AccessibilityService {
       if (running) return;
       if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
       if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
-      float fx = getPreferences(MODE_PRIVATE).getFloat("dodgeX", 0.90f);
-      float fy = getPreferences(MODE_PRIVATE).getFloat("dodgeY", 0.88f);
+      float fx = getPreferences(MODE_PRIVATE).getFloat(keyX(), 0.90f);
+      float fy = getPreferences(MODE_PRIVATE).getFloat(keyY(), 0.88f);
       refreshScreen();
       final float x = screenW * fx, y = screenH * fy;
       handler.postDelayed(() -> {
@@ -210,16 +266,20 @@ public class CombatAccessibilityService extends AccessibilityService {
     stopCombat();
     attackX = ax; attackY = ay; dodgeX = dx; dodgeY = dy;
     lastDodgeAt = 0L;
+    warningFrames = 0;
+    warningPreviouslyVisible = false;
     running = true;
     updateOverlay();
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
     handler.post(loop);
+    scheduleScan();
   }
 
   public void stopCombat() {
     running = false;
     handler.removeCallbacks(loop);
+    handler.removeCallbacks(scanLoop);
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
     updateOverlay();
