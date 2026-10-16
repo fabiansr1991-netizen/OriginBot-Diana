@@ -13,6 +13,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.Button;
+import android.widget.Toast;
 
 /** Experimental timed taps only. No screen analysis or boss attack recognition. */
 public class CombatAccessibilityService extends AccessibilityService {
@@ -148,7 +149,7 @@ public class CombatAccessibilityService extends AccessibilityService {
       DisplayMetrics metrics = new DisplayMetrics();
       windowManager.getDefaultDisplay().getRealMetrics(metrics);
       handler.postDelayed(() -> {
-        tap(metrics.widthPixels * fx, metrics.heightPixels * fy);
+        tapWithFeedback(metrics.widthPixels * fx, metrics.heightPixels * fy);
         handler.postDelayed(() -> {
           if (!running && dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
           if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
@@ -212,11 +213,27 @@ public class CombatAccessibilityService extends AccessibilityService {
 
   public boolean isRunning() { return running; }
 
+  private void tapWithFeedback(float x, float y) {
+    sendTap(x, y, true);
+  }
+
   private void tap(float x, float y) {
+    sendTap(x, y, false);
+  }
+
+  private void sendTap(float x, float y, boolean feedback) {
     Path path = new Path();
     path.moveTo(x, y);
     GestureDescription gesture = new GestureDescription.Builder()
       .addStroke(new GestureDescription.StrokeDescription(path, 0, 80)).build();
-    dispatchGesture(gesture, null, null);
+    boolean accepted = dispatchGesture(gesture, feedback ? new GestureResultCallback() {
+      @Override public void onCompleted(GestureDescription g) {
+        Toast.makeText(CombatAccessibilityService.this, "Ausweich-Beruehrung ausgefuehrt", Toast.LENGTH_SHORT).show();
+      }
+      @Override public void onCancelled(GestureDescription g) {
+        Toast.makeText(CombatAccessibilityService.this, "Ausweich-Beruehrung abgebrochen", Toast.LENGTH_SHORT).show();
+      }
+    } : null, null);
+    if (feedback && !accepted) Toast.makeText(this, "Ausweich-Beruehrung nicht angenommen", Toast.LENGTH_SHORT).show();
   }
 }
