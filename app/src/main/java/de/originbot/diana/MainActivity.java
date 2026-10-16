@@ -17,7 +17,7 @@ public class MainActivity extends Activity {
     root.setOrientation(LinearLayout.VERTICAL);
     root.setPadding(32, 48, 32, 32);
     info = new TextView(this);
-    info.setText("OriginBot Diana – Testmodus\nNur feste Zeitintervalle, keine Boss-Erkennung.\nTest zuerst außerhalb des Spiels.");
+    info.setText("OriginBot Diana – Testmodus\nNur feste Zeitintervalle, keine Boss-Erkennung.\nNach Aktivierung erscheint BOT START als schwebender Knopf.\nIm Spiel BOT START/BOT STOP verwenden.\nTest zuerst außerhalb des Spiels.");
     root.addView(info);
     Button settings = new Button(this);
     settings.setText("Bedienungshilfe aktivieren");
