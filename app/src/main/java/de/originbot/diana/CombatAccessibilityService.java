@@ -37,6 +37,12 @@ public class CombatAccessibilityService extends AccessibilityService {
   private Button rotationButton;
   private Button calibrationTestButton;
   private int calibrationTestSlot = 0;
+  private final Button[] skillMarkers = new Button[3];
+  private final WindowManager.LayoutParams[] skillMarkerParams = new WindowManager.LayoutParams[3];
+  private final float[] skillX = {0.77f, 0.85f, 0.92f};
+  private final float[] skillY = {0.67f, 0.64f, 0.70f};
+  private int skillStep = 0;
+  private long lastThreatAt = 0L;
   private boolean rotationEnabled = false;
   private boolean autoCalibrating = false;
   private Button autoCalibrationButton;
@@ -125,6 +131,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     boolean warning = samples > 0 && hits > 12 && hits * 100 > samples;
     warningFrames = warning ? Math.min(3, warningFrames + 1) : 0;
     if (warningFrames >= 1 && SystemClock.uptimeMillis() - lastWarningAt > 900L) {
+      lastThreatAt = SystemClock.uptimeMillis();
       lastWarningAt = SystemClock.uptimeMillis();
       warningPreviouslyVisible = true;
       onIncomingAttackDetected();
@@ -152,6 +159,14 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (windowManager == null) return;
     refreshScreen();
     if (running) stopCombat();
+    loadSkills();
+    for (int i = 0; i < 3; i++) {
+      if (skillMarkers[i] != null) {
+        skillMarkerParams[i].x = Math.round(screenW * skillX[i]) - skillMarkers[i].getWidth()/2;
+        skillMarkerParams[i].y = Math.round(screenH * skillY[i]) - skillMarkers[i].getHeight()/2;
+        windowManager.updateViewLayout(skillMarkers[i], skillMarkerParams[i]);
+      }
+    }
     loadHeroSlots();
     for (int i = 0; i < 4; i++) {
       if (heroMarkers[i] != null) {
@@ -183,19 +198,28 @@ public class CombatAccessibilityService extends AccessibilityService {
       if (!running) return;
       long now = SystemClock.uptimeMillis();
       // Fallback for Diana attacks without reliable red telegraphs.
-      if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight) {
+      if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight && now - lastThreatAt > 1500L) {
         nextPeriodicDodgeAt = now + (survivalMode ? 1200L : 2000L);
         onIncomingAttackDetected();
       }
-      if (rotationEnabled && rotationCalibrated() && now >= nextRotationAt && !gestureInFlight && now >= dodgePriorityUntil) {
+      if (rotationEnabled && rotationCalibrated() && skillStep >= 4 && now >= nextRotationAt && !gestureInFlight && now >= dodgePriorityUntil) {
         rotationSlot = (rotationSlot + 1) % 4;
         tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
-        nextRotationAt = now + 6500L;
-        nextAttackAt = now + 800L;
+        nextRotationAt = now + 5200L;
+        skillStep = 0;
+        nextAttackAt = now + 550L;
       }
       if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
-        tap(attackX, attackY);
-        nextAttackAt = now + (survivalMode ? 1050L : 650L);
+        // One gesture at a time. Three calibrated skills, then normal attack.
+        if (skillStep < 3) {
+          tap(screenW * skillX[skillStep], screenH * skillY[skillStep]);
+          skillStep++;
+          nextAttackAt = now + 850L;
+        } else {
+          tap(attackX, attackY);
+          skillStep = 4;
+          nextAttackAt = now + (survivalMode ? 520L : 370L);
+        }
       }
       if (running) handler.postDelayed(this, 100L);
     }
@@ -250,6 +274,8 @@ public class CombatAccessibilityService extends AccessibilityService {
       showAttackMarker();
       showCalibrationTestButton();
       showAutoCalibrationButton();
+      showSkillMarkers();
+      compactControls();
     } catch (RuntimeException e) {
       overlayButton = null;
     }
@@ -363,9 +389,11 @@ public class CombatAccessibilityService extends AccessibilityService {
 
   private void attachDrag(Button b, WindowManager.LayoutParams p, Runnable save) {
     b.setAlpha(0.45f);
-    b.setTextSize(10);
+    b.setTextSize(9);
     b.setAllCaps(false);
-    b.setPadding(4, 2, 4, 2);
+    b.setMinWidth(0); b.setMinimumWidth(0);
+    b.setMinHeight(0); b.setMinimumHeight(0);
+    b.setPadding(2, 1, 2, 1);
     b.setOnTouchListener(new View.OnTouchListener() {
       float downX, downY;
       int startX, startY;
@@ -426,6 +454,46 @@ public class CombatAccessibilityService extends AccessibilityService {
         .putFloat("attackY" + suffix, (p.y + b.getHeight() / 2f) / screenH).apply();
       Toast.makeText(this, "Angriff gespeichert", Toast.LENGTH_SHORT).show();
     });
+  }
+
+  private void compactControls() {
+    Button[] controls = {overlayButton, dodgeTestButton, survivalButton, rotationButton, calibrationTestButton, autoCalibrationButton};
+    for (Button b : controls) {
+      if (b == null) continue;
+      b.setTextSize(9);
+      b.setMinHeight(0); b.setMinimumHeight(0);
+      b.setMinWidth(0); b.setMinimumWidth(0);
+      b.setPadding(4, 1, 4, 1);
+      b.setAlpha(0.35f);
+    }
+  }
+  private String skillKey(int i, String axis) { return "skill" + i + axis + (screenW > screenH ? "L" : "P"); }
+  private void loadSkills() {
+    for (int i = 0; i < 3; i++) {
+      skillX[i] = getPreferences(MODE_PRIVATE).getFloat(skillKey(i,"X"), skillX[i]);
+      skillY[i] = getPreferences(MODE_PRIVATE).getFloat(skillKey(i,"Y"), skillY[i]);
+    }
+  }
+  private void showSkillMarkers() {
+    loadSkills();
+    for (int i = 0; i < 3; i++) {
+      final int slot = i;
+      Button b = new Button(this);
+      b.setText("F" + (i + 1));
+      b.setMinWidth(0); b.setMinimumWidth(0);
+      b.setMinHeight(0); b.setMinimumHeight(0);
+      skillMarkers[i] = b;
+      WindowManager.LayoutParams p = calibrationParams(skillX[i], skillY[i]);
+      skillMarkerParams[i] = p;
+      attachDrag(b, p, () -> {
+        skillX[slot] = (p.x + b.getWidth()/2f)/screenW;
+        skillY[slot] = (p.y + b.getHeight()/2f)/screenH;
+        getPreferences(MODE_PRIVATE).edit()
+          .putFloat(skillKey(slot,"X"), skillX[slot])
+          .putFloat(skillKey(slot,"Y"), skillY[slot]).apply();
+        Toast.makeText(this, "F" + (slot+1) + " gespeichert", Toast.LENGTH_SHORT).show();
+      });
+    }
   }
 
   private void showAutoCalibrationButton() {
@@ -652,6 +720,9 @@ public class CombatAccessibilityService extends AccessibilityService {
     stopDodgeTest();
     stopCombat();
     if (windowManager != null) {
+      for (int i = 0; i < 3; i++) {
+        if (skillMarkers[i] != null) { windowManager.removeView(skillMarkers[i]); skillMarkers[i] = null; }
+      }
       for (int i = 0; i < 4; i++) {
         if (heroMarkers[i] != null) { windowManager.removeView(heroMarkers[i]); heroMarkers[i] = null; }
       }
@@ -702,6 +773,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     dodgeLeftNext = true;
     lastDodgeAt = 0L;
     rotationSlot = 0;
+    skillStep = 0;
+    loadSkills();
     nextRotationAt = SystemClock.uptimeMillis() + 6500L;
     nextPeriodicDodgeAt = SystemClock.uptimeMillis() + 1000L;
     nextAttackAt = 0L;
@@ -717,6 +790,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (calibrationTestButton != null) calibrationTestButton.setVisibility(View.GONE);
     if (autoCalibrationButton != null) autoCalibrationButton.setVisibility(View.GONE);
     for (Button b : heroMarkers) if (b != null) b.setVisibility(View.GONE);
+    for (Button b : skillMarkers) if (b != null) b.setVisibility(View.GONE);
     if (attackMarker != null) attackMarker.setVisibility(View.GONE);
     handler.post(loop);
     scheduleScan();
@@ -732,6 +806,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (calibrationTestButton != null) calibrationTestButton.setVisibility(View.VISIBLE);
     if (autoCalibrationButton != null) autoCalibrationButton.setVisibility(View.VISIBLE);
     for (Button b : heroMarkers) if (b != null) b.setVisibility(View.VISIBLE);
+    for (Button b : skillMarkers) if (b != null) b.setVisibility(View.VISIBLE);
     if (attackMarker != null) attackMarker.setVisibility(View.VISIBLE);
     updateOverlay();
   }
