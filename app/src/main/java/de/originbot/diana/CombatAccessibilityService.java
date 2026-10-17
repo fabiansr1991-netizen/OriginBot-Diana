@@ -27,6 +27,8 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean running;
   private boolean dodgeTestRunning;
   private boolean gestureInFlight;
+  private boolean periodicDodgeEnabled = true;
+  private long nextPeriodicDodgeAt;
   private long nextAttackAt;
   private long dodgePriorityUntil;
   private float testDodgeX, testDodgeY;
@@ -129,6 +131,11 @@ public class CombatAccessibilityService extends AccessibilityService {
     @Override public void run() {
       if (!running) return;
       long now = SystemClock.uptimeMillis();
+      // Fallback for Diana attacks without reliable red telegraphs.
+      if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight) {
+        nextPeriodicDodgeAt = now + 2000L;
+        onIncomingAttackDetected();
+      }
       if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
         tap(attackX, attackY);
         nextAttackAt = now + 650L;
@@ -296,6 +303,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     stopCombat();
     attackX = ax; attackY = ay; dodgeX = dx; dodgeY = dy;
     lastDodgeAt = 0L;
+    nextPeriodicDodgeAt = SystemClock.uptimeMillis() + 1000L;
     nextAttackAt = 0L;
     dodgePriorityUntil = 0L;
     lastWarningAt = 0L;
@@ -328,9 +336,10 @@ public class CombatAccessibilityService extends AccessibilityService {
   public void onIncomingAttackDetected() {
     if (!running) return;
     long now = android.os.SystemClock.uptimeMillis();
-    if (now - lastDodgeAt < DODGE_COOLDOWN_MS) return;
+    if (now - lastDodgeAt < DODGE_COOLDOWN_MS || gestureInFlight) return;
     lastDodgeAt = now;
     dodgePriorityUntil = now + 400L;
+    nextPeriodicDodgeAt = Math.max(nextPeriodicDodgeAt, now + 2000L);
     handler.removeCallbacks(loop);
     tap(dodgeX, dodgeY);
     handler.postDelayed(loop, 400L);
