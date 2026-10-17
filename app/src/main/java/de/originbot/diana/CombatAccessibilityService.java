@@ -231,11 +231,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     @Override public void run() {
       if (!running) return;
       long now = SystemClock.uptimeMillis();
-      if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight
-          && now - lastThreatAt > 1500L && !threatActive) {
-        nextPeriodicDodgeAt = now + 1400L;
-        onIncomingAttackDetected();
-      }
+      // Do not spam dodge in safe moments. Screenshot threat detection triggers it separately.
       if (screenW > screenH && !gestureInFlight && !dodgeQueued && !threatActive
           && now >= dodgePriorityUntil && now >= nextTargetAttemptAt) {
         // Experimental target reticle tap; screenshot does not confirm game behavior.
