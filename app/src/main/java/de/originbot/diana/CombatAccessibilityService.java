@@ -307,14 +307,15 @@ public class CombatAccessibilityService extends AccessibilityService {
   private void showDodgeMarker() {
     dodgeMarker = new Button(this);
     dodgeMarker.setText("ZIEL");
-    dodgeMarker.setTextSize(10);
+    dodgeMarker.setTextSize(14);
     dodgeMarker.setMinWidth(0);
     dodgeMarker.setMinimumWidth(0);
     dodgeMarker.setMinHeight(0);
     dodgeMarker.setMinimumHeight(0);
-    dodgeMarker.setPadding(6, 2, 6, 2);
+    dodgeMarker.setPadding(0, 0, 0, 0);
+    dodgeMarker.setGravity(Gravity.CENTER);
     dodgeMarker.setAllCaps(false);
-    dodgeMarker.setAlpha(0.45f);
+    dodgeMarker.setAlpha(0.8f);
     float fx = getPreferences(MODE_PRIVATE).getFloat(keyX(), 0.90f);
     float fy = getPreferences(MODE_PRIVATE).getFloat(keyY(), 0.88f);
     markerParams = new WindowManager.LayoutParams(
@@ -324,8 +325,11 @@ public class CombatAccessibilityService extends AccessibilityService {
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT);
     markerParams.gravity = Gravity.TOP | Gravity.LEFT;
-    markerParams.x = Math.round(screenW * fx) - 25;
-    markerParams.y = Math.round(screenH * fy) - 20;
+    int dodgeDiameter = Math.round(Math.min(screenW, screenH) * 0.105f);
+    markerParams.width = dodgeDiameter;
+    markerParams.height = dodgeDiameter;
+    markerParams.x = Math.round(screenW * fx) - dodgeDiameter / 2;
+    markerParams.y = Math.round(screenH * fy) - dodgeDiameter / 2;
     dodgeMarker.setOnTouchListener(new View.OnTouchListener() {
       float downX, downY;
       int startX, startY;
@@ -355,18 +359,23 @@ public class CombatAccessibilityService extends AccessibilityService {
   private void showJoystickMarker() {
     joystickMarker = new Button(this);
     joystickMarker.setText("STICK");
-    joystickMarker.setTextSize(10);
+    joystickMarker.setTextSize(16);
     joystickMarker.setAllCaps(false);
-    joystickMarker.setAlpha(0.45f);
-    joystickMarker.setPadding(4, 2, 4, 2);
+    joystickMarker.setAlpha(0.70f);
+    joystickMarker.setPadding(0, 0, 0, 0);
+    joystickMarker.setGravity(Gravity.CENTER);
+    joystickMarker.setTextColor(Color.WHITE);
     joystickMarkerParams = new WindowManager.LayoutParams(
       WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT);
     joystickMarkerParams.gravity = Gravity.TOP | Gravity.LEFT;
-    joystickMarkerParams.x = Math.round(screenW * getPreferences(MODE_PRIVATE).getFloat("joystickX", 0.14f)) - 24;
-    joystickMarkerParams.y = Math.round(screenH * getPreferences(MODE_PRIVATE).getFloat("joystickY", 0.78f)) - 20;
+    int stickDiameter = Math.round(Math.min(screenW, screenH) * 0.25f);
+    joystickMarkerParams.width = stickDiameter;
+    joystickMarkerParams.height = stickDiameter;
+    joystickMarkerParams.x = Math.round(screenW * getPreferences(MODE_PRIVATE).getFloat("joystickX", 0.14f)) - stickDiameter / 2;
+    joystickMarkerParams.y = Math.round(screenH * getPreferences(MODE_PRIVATE).getFloat("joystickY", 0.78f)) - stickDiameter / 2;
     joystickMarker.setOnTouchListener(new View.OnTouchListener() {
       float downX, downY;
       int startX, startY;
@@ -401,18 +410,24 @@ public class CombatAccessibilityService extends AccessibilityService {
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT);
     p.gravity = Gravity.TOP | Gravity.LEFT;
-    p.x = Math.round(screenW * x) - 22;
-    p.y = Math.round(screenH * y) - 18;
+    int diameter = Math.round(Math.min(screenW, screenH) * 0.105f);
+    p.width = diameter;
+    p.height = diameter;
+    p.x = Math.round(screenW * x) - diameter / 2;
+    p.y = Math.round(screenH * y) - diameter / 2;
     return p;
   }
 
   private void attachDrag(Button b, WindowManager.LayoutParams p, Runnable save) {
-    b.setAlpha(0.45f);
-    b.setTextSize(9);
+    b.setAlpha(0.85f);
+    b.setTextSize(13);
     b.setAllCaps(false);
     b.setMinWidth(0); b.setMinimumWidth(0);
     b.setMinHeight(0); b.setMinimumHeight(0);
-    b.setPadding(2, 1, 2, 1);
+    b.setPadding(0, 0, 0, 0);
+    b.setGravity(Gravity.CENTER);
+    b.setTextColor(Color.WHITE);
+    b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.argb(110, 35, 35, 55)));
     b.setOnTouchListener(new View.OnTouchListener() {
       float downX, downY;
       int startX, startY;
@@ -479,11 +494,11 @@ public class CombatAccessibilityService extends AccessibilityService {
     Button[] controls = {overlayButton, dodgeTestButton, survivalButton, rotationButton, calibrationTestButton, autoCalibrationButton};
     for (Button b : controls) {
       if (b == null) continue;
-      b.setTextSize(9);
+      b.setTextSize(12);
       b.setMinHeight(0); b.setMinimumHeight(0);
       b.setMinWidth(0); b.setMinimumWidth(0);
       b.setPadding(4, 1, 4, 1);
-      b.setAlpha(0.35f);
+      b.setAlpha(0.75f);
     }
   }
   private String skillKey(int i, String axis) { return "skill" + i + axis + (screenW > screenH ? "L" : "P"); }
