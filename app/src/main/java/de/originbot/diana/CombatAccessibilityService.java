@@ -213,35 +213,39 @@ public class CombatAccessibilityService extends AccessibilityService {
     }
   }
 
+  // Each cycle uses all three mapped skills, one basic attack, then changes hero.
+  // Android gestures are serialized to prevent dropped inputs.
   private final Runnable loop = new Runnable() {
     @Override public void run() {
       if (!running) return;
       long now = SystemClock.uptimeMillis();
-      // Fallback for Diana attacks without reliable red telegraphs.
-      if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight && now - lastThreatAt > 1500L && !threatActive) {
-        nextPeriodicDodgeAt = now + (survivalMode ? 1200L : 2000L);
+      if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight
+          && now - lastThreatAt > 1500L && !threatActive) {
+        nextPeriodicDodgeAt = now + 1700L;
         onIncomingAttackDetected();
       }
-      if (rotationEnabled && rotationCalibrated() && skillStep >= 4 && now >= nextRotationAt && !gestureInFlight && now >= dodgePriorityUntil) {
-        rotationSlot = (rotationSlot + 1) % 4;
-        tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
-        nextRotationAt = now + 5200L;
-        skillStep = 0;
-        nextAttackAt = now + 550L;
-      }
       if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
-        // One gesture at a time. Three calibrated skills, then normal attack.
         if (skillStep < 3) {
           tap(screenW * skillX[skillStep], screenH * skillY[skillStep]);
           skillStep++;
-          nextAttackAt = now + 850L;
-        } else {
+          nextAttackAt = now + 390L;
+        } else if (skillStep == 3) {
           tap(attackX, attackY);
           skillStep = 4;
-          nextAttackAt = now + (survivalMode ? 520L : 370L);
+          nextAttackAt = now + 310L;
+        } else if (rotationEnabled && rotationCalibrated()) {
+          rotationSlot = (rotationSlot + 1) % 4;
+          tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
+          skillStep = 0;
+          nextAttackAt = now + 460L;
+        } else {
+          // Never tap unverified character positions.
+          tap(attackX, attackY);
+          skillStep = 0;
+          nextAttackAt = now + 350L;
         }
       }
-      if (running) handler.postDelayed(this, 100L);
+      if (running) handler.postDelayed(this, 55L);
     }
   };
 
@@ -923,7 +927,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     Path path = new Path();
     path.moveTo(x, y);
     GestureDescription gesture = new GestureDescription.Builder()
-      .addStroke(new GestureDescription.StrokeDescription(path, 0, 80)).build();
+      .addStroke(new GestureDescription.StrokeDescription(path, 0, 55)).build();
     gestureInFlight = true;
     boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
       @Override public void onCompleted(GestureDescription g) {
