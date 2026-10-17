@@ -47,6 +47,9 @@ public class CombatAccessibilityService extends AccessibilityService {
   private static final long SKILL_RETRY_MS = 4800L;
   private long nextHeroSwitchAt = 0L;
   private long nextCameraSweepAt = 0L;
+  private long nextTargetAttemptAt = 0L;
+  private static final float TARGET_X = 438f / 1536f;
+  private static final float TARGET_Y = 626f / 709f;
   private long lastCombatActionAt = 0L;
   private boolean cameraSweepRight = true;
   private long nextUltimateAttemptAt = 0L;
@@ -232,6 +235,13 @@ public class CombatAccessibilityService extends AccessibilityService {
           && now - lastThreatAt > 1500L && !threatActive) {
         nextPeriodicDodgeAt = now + 1400L;
         onIncomingAttackDetected();
+      }
+      if (screenW > screenH && !gestureInFlight && !dodgeQueued && !threatActive
+          && now >= dodgePriorityUntil && now >= nextTargetAttemptAt) {
+        // Experimental target reticle tap; screenshot does not confirm game behavior.
+        tap(screenW * TARGET_X, screenH * TARGET_Y);
+        nextTargetAttemptAt = now + 12000L;
+        nextAttackAt = Math.max(nextAttackAt, now + 250L);
       }
       if (!gestureInFlight && !dodgeQueued && now >= dodgePriorityUntil && now >= nextCameraSweepAt && !threatActive && now - lastThreatAt > 1800L) {
         cameraSweep();
@@ -838,6 +848,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     for (int i = 0; i < 3; i++) skillReadyAt[i] = 0L;
     nextHeroSwitchAt = SystemClock.uptimeMillis() + 3600L;
     nextCameraSweepAt = SystemClock.uptimeMillis() + 3500L;
+    nextTargetAttemptAt = SystemClock.uptimeMillis() + 2200L;
     nextUltimateAttemptAt = SystemClock.uptimeMillis() + 1600L;
     rotationEnabled = true;
     periodicDodgeEnabled = true;
