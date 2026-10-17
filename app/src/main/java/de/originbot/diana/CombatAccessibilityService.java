@@ -258,7 +258,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     DisplayMetrics dm = new DisplayMetrics();
     windowManager.getDefaultDisplay().getRealMetrics(dm);
     screenW = dm.widthPixels; screenH = dm.heightPixels;
-    overlayButton.setText("BOT START");
+    overlayButton.setText("AUTO START");
     overlayButton.setAllCaps(false);
     overlayButton.setAlpha(0.45f);
     overlayButton.setOnClickListener(v -> {
@@ -285,17 +285,15 @@ public class CombatAccessibilityService extends AccessibilityService {
     params.y = 16;
     try {
       windowManager.addView(overlayButton, params);
-      showDodgeMarker();
-      showJoystickMarker();
-      showDodgeTestButton();
-      showSurvivalButton();
-      showRotationButton();
-      showHeroMarkers();
-      showAttackMarker();
-      showCalibrationTestButton();
-      showAutoCalibrationButton();
-      showSkillMarkers();
-      compactControls();
+      // Single-control mode: no calibration markers or secondary buttons.
+      // Previously saved calibration values remain available to the combat loop.
+      overlayButton.setTextSize(12);
+      overlayButton.setMinWidth(0);
+      overlayButton.setMinimumWidth(0);
+      overlayButton.setMinHeight(0);
+      overlayButton.setMinimumHeight(0);
+      overlayButton.setPadding(12, 5, 12, 5);
+      overlayButton.setAlpha(0.65f);
     } catch (RuntimeException e) {
       overlayButton = null;
     }
@@ -810,6 +808,10 @@ public class CombatAccessibilityService extends AccessibilityService {
     lastDodgeAt = 0L;
     rotationSlot = 0;
     skillStep = 0;
+    rotationEnabled = rotationCalibrated();
+    periodicDodgeEnabled = true;
+    survivalMode = true;
+    loadHeroSlots();
     loadSkills();
     nextRotationAt = SystemClock.uptimeMillis() + 6500L;
     nextPeriodicDodgeAt = SystemClock.uptimeMillis() + 1000L;
@@ -851,7 +853,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   }
 
   private void updateOverlay() {
-    if (overlayButton != null) overlayButton.setText(running ? "BOT STOP" : "BOT START");
+    if (overlayButton != null) overlayButton.setText(running ? "AUTO STOP" : "AUTO START");
   }
 
   public boolean isRunning() { return running; }
