@@ -251,11 +251,11 @@ public class CombatAccessibilityService extends AccessibilityService {
           int index = (skillStep + offset) % 3;
           if (now >= skillReadyAt[index]) { readySkill = index; break; }
         }
-        if (rotationEnabled && now >= nextHeroSwitchAt) {
+        if (rotationEnabled && now >= nextHeroSwitchAt && readySkill < 0) {
           // Rotation must take priority even while abilities keep becoming ready.
           tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
           rotationSlot = (rotationSlot + 1) % 3;
-          nextHeroSwitchAt = now + 3600L;
+          nextHeroSwitchAt = now + 1800L;
           for (int i = 0; i < 3; i++) skillReadyAt[i] = now + 500L;
           nextAttackAt = now + 570L;
         } else if (screenW > screenH && now >= nextUltimateAttemptAt) {
