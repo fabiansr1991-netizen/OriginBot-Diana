@@ -43,6 +43,12 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final float[] skillY = {0.67f, 0.64f, 0.70f};
   private int skillStep = 0;
   private long lastThreatAt = 0L;
+  private long threatStartedAt = 0L;
+  private long lastCounterAt = 0L;
+  private boolean threatActive = false;
+  private int clearThreatFrames = 0;
+  private static final long REACTION_DELAY_MS = 115L;
+  private static final long COUNTER_DELAY_MS = 330L;
   private boolean rotationEnabled = false;
   private boolean autoCalibrating = false;
   private Button autoCalibrationButton;
@@ -130,11 +136,24 @@ public class CombatAccessibilityService extends AccessibilityService {
     }
     boolean warning = samples > 0 && hits > 12 && hits * 100 > samples;
     warningFrames = warning ? Math.min(3, warningFrames + 1) : 0;
+    if (warning) {
+      clearThreatFrames = 0;
+      if (!threatActive) {
+        threatActive = true;
+        threatStartedAt = SystemClock.uptimeMillis();
+      }
+    } else {
+      clearThreatFrames++;
+      if (clearThreatFrames >= 2) threatActive = false;
+    }
     if (warningFrames >= 1 && SystemClock.uptimeMillis() - lastWarningAt > 900L) {
       lastThreatAt = SystemClock.uptimeMillis();
       lastWarningAt = SystemClock.uptimeMillis();
       warningPreviouslyVisible = true;
-      onIncomingAttackDetected();
+      handler.postDelayed(() -> {
+        if (running && threatActive && SystemClock.uptimeMillis() - threatStartedAt >= REACTION_DELAY_MS)
+          onIncomingAttackDetected();
+      }, REACTION_DELAY_MS);
     }
     if (!warning) warningPreviouslyVisible = false;
   }
@@ -198,7 +217,7 @@ public class CombatAccessibilityService extends AccessibilityService {
       if (!running) return;
       long now = SystemClock.uptimeMillis();
       // Fallback for Diana attacks without reliable red telegraphs.
-      if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight && now - lastThreatAt > 1500L) {
+      if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight && now - lastThreatAt > 1500L && !threatActive) {
         nextPeriodicDodgeAt = now + (survivalMode ? 1200L : 2000L);
         onIncomingAttackDetected();
       }
@@ -780,6 +799,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     nextAttackAt = 0L;
     dodgePriorityUntil = 0L;
     lastWarningAt = 0L;
+    threatActive = false;
+    clearThreatFrames = 0;
     warningFrames = 0;
     warningPreviouslyVisible = false;
     running = true;
@@ -823,7 +844,17 @@ public class CombatAccessibilityService extends AccessibilityService {
     long now = android.os.SystemClock.uptimeMillis();
     if (now - lastDodgeAt < DODGE_COOLDOWN_MS || gestureInFlight) return;
     lastDodgeAt = now;
-    dodgePriorityUntil = now + 400L;
+    dodgePriorityUntil = now + 450L;
+    // Counter follow-up after a dodge attempt; success is not observable here.
+    if (now - lastCounterAt > 1000L) {
+      lastCounterAt = now;
+      handler.postDelayed(() -> {
+        if (running && !gestureInFlight && SystemClock.uptimeMillis() >= dodgePriorityUntil - 100L) {
+          tap(attackX, attackY);
+          nextAttackAt = SystemClock.uptimeMillis() + 350L;
+        }
+      }, COUNTER_DELAY_MS);
+    }
     nextPeriodicDodgeAt = Math.max(nextPeriodicDodgeAt, now + 2000L);
     handler.removeCallbacks(loop);
     directedDodge();
