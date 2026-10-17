@@ -43,6 +43,9 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final float[] skillX = {0.77f, 0.85f, 0.92f};
   private final float[] skillY = {0.67f, 0.64f, 0.70f};
   private int skillStep = 0;
+  private final long[] skillReadyAt = new long[3];
+  private static final long SKILL_RETRY_MS = 6500L;
+  private long nextHeroSwitchAt = 0L;
   private long lastThreatAt = 0L;
   private long threatStartedAt = 0L;
   private long lastCounterAt = 0L;
@@ -225,24 +228,27 @@ public class CombatAccessibilityService extends AccessibilityService {
         onIncomingAttackDetected();
       }
       if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
-        if (skillStep < 3) {
-          tap(screenW * skillX[skillStep], screenH * skillY[skillStep]);
-          skillStep++;
-          nextAttackAt = now + 390L;
-        } else if (skillStep == 3) {
-          tap(attackX, attackY);
-          skillStep = 4;
-          nextAttackAt = now + 310L;
-        } else if (rotationEnabled) {
+        // Limit skill retries to avoid hammering buttons during cooldowns.
+        int readySkill = -1;
+        for (int offset = 0; offset < 3; offset++) {
+          int index = (skillStep + offset) % 3;
+          if (now >= skillReadyAt[index]) { readySkill = index; break; }
+        }
+        if (readySkill >= 0) {
+          tap(screenW * skillX[readySkill], screenH * skillY[readySkill]);
+          skillReadyAt[readySkill] = now + SKILL_RETRY_MS;
+          skillStep = (readySkill + 1) % 3;
+          nextAttackAt = now + 430L;
+        } else if (rotationEnabled && now >= nextHeroSwitchAt) {
           tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
           rotationSlot = (rotationSlot + 1) % 3;
-          skillStep = 0;
-          nextAttackAt = now + 750L;
+          nextHeroSwitchAt = now + 4200L;
+          // On a new hero, skills can have different cooldowns.
+          for (int i = 0; i < 3; i++) skillReadyAt[i] = now + 700L;
+          nextAttackAt = now + 850L;
         } else {
-          // Never tap unverified character positions.
           tap(attackX, attackY);
-          skillStep = 0;
-          nextAttackAt = now + 350L;
+          nextAttackAt = now + 480L;
         }
       }
       if (running) handler.postDelayed(this, 55L);
@@ -812,6 +818,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     lastDodgeAt = 0L;
     rotationSlot = 0;
     skillStep = 0;
+    for (int i = 0; i < 3; i++) skillReadyAt[i] = 0L;
+    nextHeroSwitchAt = SystemClock.uptimeMillis() + 4200L;
     rotationEnabled = true;
     periodicDodgeEnabled = true;
     survivalMode = true;
