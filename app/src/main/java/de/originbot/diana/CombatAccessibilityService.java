@@ -35,6 +35,8 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean survivalMode = true;
   private Button survivalButton;
   private Button rotationButton;
+  private Button calibrationTestButton;
+  private int calibrationTestSlot = 0;
   private boolean rotationEnabled = false;
   private int rotationSlot = 0;
   private long nextRotationAt;
@@ -244,6 +246,7 @@ public class CombatAccessibilityService extends AccessibilityService {
       showRotationButton();
       showHeroMarkers();
       showAttackMarker();
+      showCalibrationTestButton();
     } catch (RuntimeException e) {
       overlayButton = null;
     }
@@ -422,6 +425,30 @@ public class CombatAccessibilityService extends AccessibilityService {
     });
   }
 
+  private void showCalibrationTestButton() {
+    calibrationTestButton = new Button(this);
+    calibrationTestButton.setText("H1 TEST");
+    calibrationTestButton.setTextSize(10);
+    calibrationTestButton.setAllCaps(false);
+    calibrationTestButton.setAlpha(0.45f);
+    calibrationTestButton.setOnClickListener(v -> {
+      if (running) { Toast.makeText(this, "Bot erst stoppen", Toast.LENGTH_SHORT).show(); return; }
+      loadHeroSlots();
+      int slot = calibrationTestSlot;
+      if (!getPreferences(MODE_PRIVATE).getBoolean("heroSet" + slot + (screenW > screenH ? "L" : "P"), false)) {
+        Toast.makeText(this, "H" + (slot + 1) + " zuerst verschieben", Toast.LENGTH_LONG).show();
+        return;
+      }
+      tapWithFeedback(screenW * heroSlotX[slot], screenH * heroSlotY[slot]);
+      calibrationTestSlot = (calibrationTestSlot + 1) % 4;
+      calibrationTestButton.setText("H" + (calibrationTestSlot + 1) + " TEST");
+    });
+    WindowManager.LayoutParams p = calibrationParams(0.40f, 0.55f);
+    p.x = Math.round(screenW * 0.40f);
+    p.y = 380;
+    windowManager.addView(calibrationTestButton, p);
+  }
+
   private void showRotationButton() {
     rotationButton = new Button(this);
     rotationButton.setAllCaps(false);
@@ -523,6 +550,10 @@ public class CombatAccessibilityService extends AccessibilityService {
       }
       if (attackMarker != null) { windowManager.removeView(attackMarker); attackMarker = null; }
     }
+    if (windowManager != null && calibrationTestButton != null) {
+      windowManager.removeView(calibrationTestButton);
+      calibrationTestButton = null;
+    }
     if (windowManager != null && rotationButton != null) {
       windowManager.removeView(rotationButton);
       rotationButton = null;
@@ -572,6 +603,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
     if (joystickMarker != null) joystickMarker.setVisibility(View.GONE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
+    if (calibrationTestButton != null) calibrationTestButton.setVisibility(View.GONE);
     for (Button b : heroMarkers) if (b != null) b.setVisibility(View.GONE);
     if (attackMarker != null) attackMarker.setVisibility(View.GONE);
     handler.post(loop);
@@ -585,6 +617,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
     if (joystickMarker != null) joystickMarker.setVisibility(View.VISIBLE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
+    if (calibrationTestButton != null) calibrationTestButton.setVisibility(View.VISIBLE);
     for (Button b : heroMarkers) if (b != null) b.setVisibility(View.VISIBLE);
     if (attackMarker != null) attackMarker.setVisibility(View.VISIBLE);
     updateOverlay();
