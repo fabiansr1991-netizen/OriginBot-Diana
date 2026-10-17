@@ -233,8 +233,8 @@ public class CombatAccessibilityService extends AccessibilityService {
           tap(attackX, attackY);
           skillStep = 4;
           nextAttackAt = now + 310L;
-        } else if (rotationEnabled && rotationCalibrated()) {
-          rotationSlot = (rotationSlot + 1) % 4;
+        } else if (rotationEnabled) {
+          rotationSlot = (rotationSlot + 1) % 3;
           tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
           skillStep = 0;
           nextAttackAt = now + 460L;
@@ -812,10 +812,16 @@ public class CombatAccessibilityService extends AccessibilityService {
     lastDodgeAt = 0L;
     rotationSlot = 0;
     skillStep = 0;
-    rotationEnabled = rotationCalibrated();
+    rotationEnabled = true;
     periodicDodgeEnabled = true;
     survivalMode = true;
     loadHeroSlots();
+    // Three visible swap portraits; active hero has no fourth swap button.
+    if (screenW > screenH) {
+      heroSlotX[0] = 1368f / 1536f; heroSlotY[0] = 157f / 709f;
+      heroSlotX[1] = 1368f / 1536f; heroSlotY[1] = 255f / 709f;
+      heroSlotX[2] = 1368f / 1536f; heroSlotY[2] = 354f / 709f;
+    }
     loadSkills();
     nextRotationAt = SystemClock.uptimeMillis() + 6500L;
     nextPeriodicDodgeAt = SystemClock.uptimeMillis() + 1000L;
