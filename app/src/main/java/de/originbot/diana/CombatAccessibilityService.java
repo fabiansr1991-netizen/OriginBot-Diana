@@ -165,10 +165,7 @@ public class CombatAccessibilityService extends AccessibilityService {
       lastThreatAt = SystemClock.uptimeMillis();
       lastWarningAt = SystemClock.uptimeMillis();
       warningPreviouslyVisible = true;
-      handler.postDelayed(() -> {
-        if (running && threatActive && SystemClock.uptimeMillis() - threatStartedAt >= REACTION_DELAY_MS)
-          onIncomingAttackDetected();
-      }, REACTION_DELAY_MS);
+      onIncomingAttackDetected();
     }
     if (!warning) warningPreviouslyVisible = false;
   }
@@ -909,9 +906,9 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (!running) return;
     long now = android.os.SystemClock.uptimeMillis();
     if (now - lastDodgeAt < DODGE_COOLDOWN_MS) return;
-    if (gestureInFlight) { dodgeQueued = true; dodgePriorityUntil = now + 600L; return; }
+    if (gestureInFlight) { dodgeQueued = true; dodgePriorityUntil = now + 300L; return; }
     lastDodgeAt = now;
-    dodgePriorityUntil = now + 450L;
+    dodgePriorityUntil = now + 260L;
     // Do not attack during the dodge recovery window.
     if (false && now - lastCounterAt > 1000L) {
       lastCounterAt = now;
@@ -925,7 +922,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     nextPeriodicDodgeAt = Math.max(nextPeriodicDodgeAt, now + 2000L);
     handler.removeCallbacks(loop);
     directedDodge();
-    handler.postDelayed(loop, 400L);
+    handler.postDelayed(loop, 150L);
   }
 
   /** Prefer a direct dodge tap: some games ignore simultaneous accessibility strokes. */
@@ -940,7 +937,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     path.moveTo(fromX, y);
     path.lineTo(toX, y);
     GestureDescription gesture = new GestureDescription.Builder()
-      .addStroke(new GestureDescription.StrokeDescription(path, 0, 380)).build();
+      .addStroke(new GestureDescription.StrokeDescription(path, 0, 160)).build();
     gestureInFlight = true;
     boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
       @Override public void onCompleted(GestureDescription g) { gestureFinished(); }
