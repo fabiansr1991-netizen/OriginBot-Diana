@@ -243,9 +243,9 @@ public class CombatAccessibilityService extends AccessibilityService {
         nextTargetAttemptAt = now + 12000L;
         nextAttackAt = Math.max(nextAttackAt, now + 250L);
       }
-      if (!gestureInFlight && !dodgeQueued && now >= dodgePriorityUntil && now >= nextCameraSweepAt && !threatActive && now - lastThreatAt > 1800L) {
+      if (!gestureInFlight && !dodgeQueued && now >= dodgePriorityUntil && now >= nextCameraSweepAt && !threatActive) {
         cameraSweep();
-        nextCameraSweepAt = now + 8000L;
+        nextCameraSweepAt = now + 4500L;
         nextAttackAt = Math.max(nextAttackAt, now + 280L);
       }
       if (!gestureInFlight && !dodgeQueued && now >= dodgePriorityUntil && now >= nextAttackAt) {
@@ -847,7 +847,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     skillStep = 0;
     for (int i = 0; i < 3; i++) skillReadyAt[i] = 0L;
     nextHeroSwitchAt = SystemClock.uptimeMillis() + 3600L;
-    nextCameraSweepAt = SystemClock.uptimeMillis() + 3500L;
+    nextCameraSweepAt = SystemClock.uptimeMillis() + 2100L;
     nextTargetAttemptAt = SystemClock.uptimeMillis() + 2200L;
     nextUltimateAttemptAt = SystemClock.uptimeMillis() + 1600L;
     rotationEnabled = true;
@@ -934,15 +934,15 @@ public class CombatAccessibilityService extends AccessibilityService {
   // Short swipe through the clear upper-right play area, away from action controls.
   private void cameraSweep() {
     if (gestureInFlight || dodgeQueued || threatActive || screenW <= screenH) return;
-    float fromX = screenW * (cameraSweepRight ? 0.57f : 0.71f);
-    float toX = screenW * (cameraSweepRight ? 0.71f : 0.57f);
-    float y = screenH * 0.36f;
+    float fromX = screenW * (cameraSweepRight ? 0.47f : 0.74f);
+    float toX = screenW * (cameraSweepRight ? 0.74f : 0.47f);
+    float y = screenH * 0.30f;
     cameraSweepRight = !cameraSweepRight;
     Path path = new Path();
     path.moveTo(fromX, y);
     path.lineTo(toX, y);
     GestureDescription gesture = new GestureDescription.Builder()
-      .addStroke(new GestureDescription.StrokeDescription(path, 0, 250)).build();
+      .addStroke(new GestureDescription.StrokeDescription(path, 0, 380)).build();
     gestureInFlight = true;
     boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
       @Override public void onCompleted(GestureDescription g) { gestureFinished(); }
