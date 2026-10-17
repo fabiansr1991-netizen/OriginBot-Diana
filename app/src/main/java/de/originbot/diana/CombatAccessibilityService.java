@@ -159,6 +159,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     screenW = dm.widthPixels; screenH = dm.heightPixels;
     overlayButton.setText("BOT START");
     overlayButton.setAllCaps(false);
+    overlayButton.setAlpha(0.45f);
     overlayButton.setOnClickListener(v -> {
       if (running) {
         stopCombat();
@@ -204,6 +205,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     dodgeMarker.setMinimumHeight(0);
     dodgeMarker.setPadding(6, 2, 6, 2);
     dodgeMarker.setAllCaps(false);
+    dodgeMarker.setAlpha(0.45f);
     float fx = getPreferences(MODE_PRIVATE).getFloat(keyX(), 0.90f);
     float fy = getPreferences(MODE_PRIVATE).getFloat(keyY(), 0.88f);
     markerParams = new WindowManager.LayoutParams(
@@ -245,6 +247,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     dodgeTestButton = new Button(this);
     dodgeTestButton.setText("AUSWEICH TEST");
     dodgeTestButton.setAllCaps(false);
+    dodgeTestButton.setAlpha(0.45f);
     dodgeTestButton.setOnClickListener(v -> {
       if (running) return;
       if (dodgeTestRunning) {
