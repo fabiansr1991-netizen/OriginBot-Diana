@@ -44,7 +44,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final float[] skillY = {0.67f, 0.64f, 0.70f};
   private int skillStep = 0;
   private final long[] skillReadyAt = new long[3];
-  private static final long SKILL_RETRY_MS = 6500L;
+  private static final long SKILL_RETRY_MS = 4800L;
   private long nextHeroSwitchAt = 0L;
   private long nextUltimateAttemptAt = 0L;
   private float ultimateX = 1061f / 1536f;
@@ -54,7 +54,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   private long lastCounterAt = 0L;
   private boolean threatActive = false;
   private int clearThreatFrames = 0;
-  private static final long REACTION_DELAY_MS = 115L;
+  private static final long REACTION_DELAY_MS = 85L;
   private static final long COUNTER_DELAY_MS = 330L;
   private boolean rotationEnabled = false;
   private boolean autoCalibrating = false;
@@ -126,7 +126,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     }
   };
   private void scheduleScan() {
-    if (running && Build.VERSION.SDK_INT >= 30) handler.postDelayed(scanLoop, 160);
+    if (running && Build.VERSION.SDK_INT >= 30) handler.postDelayed(scanLoop, 120);
   }
   private void analyzeFrame(Bitmap frame) {
     if (!running) return;
@@ -164,7 +164,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     }
     if (!warning) warningPreviouslyVisible = false;
   }
-  private static final long DODGE_COOLDOWN_MS = 850L;
+  private static final long DODGE_COOLDOWN_MS = 750L;
   private float attackX, attackY, dodgeX, dodgeY;
   private WindowManager windowManager;
   private Button overlayButton;
@@ -227,7 +227,7 @@ public class CombatAccessibilityService extends AccessibilityService {
       long now = SystemClock.uptimeMillis();
       if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight
           && now - lastThreatAt > 1500L && !threatActive) {
-        nextPeriodicDodgeAt = now + 1700L;
+        nextPeriodicDodgeAt = now + 1400L;
         onIncomingAttackDetected();
       }
       if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
@@ -237,29 +237,30 @@ public class CombatAccessibilityService extends AccessibilityService {
           int index = (skillStep + offset) % 3;
           if (now >= skillReadyAt[index]) { readySkill = index; break; }
         }
-        if (screenW > screenH && now >= nextUltimateAttemptAt) {
+        if (rotationEnabled && now >= nextHeroSwitchAt) {
+          // Rotation must take priority even while abilities keep becoming ready.
+          tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
+          rotationSlot = (rotationSlot + 1) % 3;
+          nextHeroSwitchAt = now + 2900L;
+          for (int i = 0; i < 3; i++) skillReadyAt[i] = now + 500L;
+          nextAttackAt = now + 570L;
+        } else if (screenW > screenH && now >= nextUltimateAttemptAt) {
           // Screenshot-derived glowing ultimate icon. Attempt sparingly; availability not yet verified.
           tap(screenW * ultimateX, screenH * ultimateY);
           nextUltimateAttemptAt = now + 18000L;
-          nextAttackAt = now + 900L;
+          nextAttackAt = now + 650L;
         } else if (readySkill >= 0) {
           tap(screenW * skillX[readySkill], screenH * skillY[readySkill]);
           skillReadyAt[readySkill] = now + SKILL_RETRY_MS;
           skillStep = (readySkill + 1) % 3;
-          nextAttackAt = now + 430L;
-        } else if (rotationEnabled && now >= nextHeroSwitchAt) {
-          tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
-          rotationSlot = (rotationSlot + 1) % 3;
-          nextHeroSwitchAt = now + 4200L;
-          // On a new hero, skills can have different cooldowns.
-          for (int i = 0; i < 3; i++) skillReadyAt[i] = now + 700L;
-          nextAttackAt = now + 850L;
+          nextAttackAt = now + 310L;
+
         } else {
           tap(attackX, attackY);
-          nextAttackAt = now + 480L;
+          nextAttackAt = now + 340L;
         }
       }
-      if (running) handler.postDelayed(this, 55L);
+      if (running) handler.postDelayed(this, 40L);
     }
   };
 
@@ -827,7 +828,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     rotationSlot = 0;
     skillStep = 0;
     for (int i = 0; i < 3; i++) skillReadyAt[i] = 0L;
-    nextHeroSwitchAt = SystemClock.uptimeMillis() + 4200L;
+    nextHeroSwitchAt = SystemClock.uptimeMillis() + 2900L;
     nextUltimateAttemptAt = SystemClock.uptimeMillis() + 1600L;
     rotationEnabled = true;
     periodicDodgeEnabled = true;
@@ -950,7 +951,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     Path path = new Path();
     path.moveTo(x, y);
     GestureDescription gesture = new GestureDescription.Builder()
-      .addStroke(new GestureDescription.StrokeDescription(path, 0, 55)).build();
+      .addStroke(new GestureDescription.StrokeDescription(path, 0, 45)).build();
     gestureInFlight = true;
     boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
       @Override public void onCompleted(GestureDescription g) {
