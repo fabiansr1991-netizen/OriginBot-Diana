@@ -46,6 +46,9 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final long[] skillReadyAt = new long[3];
   private static final long SKILL_RETRY_MS = 6500L;
   private long nextHeroSwitchAt = 0L;
+  private long nextUltimateAttemptAt = 0L;
+  private float ultimateX = 1061f / 1536f;
+  private float ultimateY = 539f / 709f;
   private long lastThreatAt = 0L;
   private long threatStartedAt = 0L;
   private long lastCounterAt = 0L;
@@ -234,7 +237,12 @@ public class CombatAccessibilityService extends AccessibilityService {
           int index = (skillStep + offset) % 3;
           if (now >= skillReadyAt[index]) { readySkill = index; break; }
         }
-        if (readySkill >= 0) {
+        if (screenW > screenH && now >= nextUltimateAttemptAt) {
+          // Screenshot-derived glowing ultimate icon. Attempt sparingly; availability not yet verified.
+          tap(screenW * ultimateX, screenH * ultimateY);
+          nextUltimateAttemptAt = now + 18000L;
+          nextAttackAt = now + 900L;
+        } else if (readySkill >= 0) {
           tap(screenW * skillX[readySkill], screenH * skillY[readySkill]);
           skillReadyAt[readySkill] = now + SKILL_RETRY_MS;
           skillStep = (readySkill + 1) % 3;
@@ -820,6 +828,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     skillStep = 0;
     for (int i = 0; i < 3; i++) skillReadyAt[i] = 0L;
     nextHeroSwitchAt = SystemClock.uptimeMillis() + 4200L;
+    nextUltimateAttemptAt = SystemClock.uptimeMillis() + 1600L;
     rotationEnabled = true;
     periodicDodgeEnabled = true;
     survivalMode = true;
