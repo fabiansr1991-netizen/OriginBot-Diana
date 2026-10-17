@@ -143,7 +143,9 @@ public class CombatAccessibilityService extends AccessibilityService {
       for (int x = w * 23 / 100; x < w * 76 / 100; x += Math.max(3, w / 115)) {
         int c = frame.getPixel(x, y);
         int r = Color.red(c), g = Color.green(c), b = Color.blue(c);
-        if (r > 155 && r > g * 1.75f && r > b * 1.55f && g < 135) hits++;
+        boolean redWarning = r > 155 && r > g * 1.75f && r > b * 1.55f && g < 135;
+        boolean blueWarning = b > 155 && b > r * 1.45f && b > g * 1.15f && r < 145;
+        if (redWarning || blueWarning) hits++;
         samples++;
       }
     }
