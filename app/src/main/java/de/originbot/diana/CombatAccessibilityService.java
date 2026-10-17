@@ -27,6 +27,8 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean running;
   private boolean dodgeTestRunning;
   private boolean gestureInFlight;
+  private boolean dodgeLeftNext = true;
+  private float joystickX, joystickY;
   private boolean periodicDodgeEnabled = true;
   private boolean survivalMode = true;
   private Button survivalButton;
@@ -336,6 +338,9 @@ public class CombatAccessibilityService extends AccessibilityService {
     stopDodgeTest();
     stopCombat();
     attackX = ax; attackY = ay; dodgeX = dx; dodgeY = dy;
+    joystickX = screenW * 0.061f;
+    joystickY = screenH * 0.79f;
+    dodgeLeftNext = true;
     lastDodgeAt = 0L;
     nextPeriodicDodgeAt = SystemClock.uptimeMillis() + 1000L;
     nextAttackAt = 0L;
@@ -375,8 +380,31 @@ public class CombatAccessibilityService extends AccessibilityService {
     dodgePriorityUntil = now + 400L;
     nextPeriodicDodgeAt = Math.max(nextPeriodicDodgeAt, now + 2000L);
     handler.removeCallbacks(loop);
-    tap(dodgeX, dodgeY);
+    directedDodge();
     handler.postDelayed(loop, 400L);
+  }
+
+  /** Move the virtual joystick sideways while pressing dodge in the same gesture. */
+  private void directedDodge() {
+    if (gestureInFlight) return;
+    float radius = screenW * 0.038f;
+    float direction = dodgeLeftNext ? -1f : 1f;
+    dodgeLeftNext = !dodgeLeftNext;
+    Path joystick = new Path();
+    joystick.moveTo(joystickX, joystickY);
+    joystick.lineTo(joystickX + direction * radius, joystickY);
+    Path dodge = new Path();
+    dodge.moveTo(dodgeX, dodgeY);
+    GestureDescription gesture = new GestureDescription.Builder()
+      .addStroke(new GestureDescription.StrokeDescription(joystick, 0, 230))
+      .addStroke(new GestureDescription.StrokeDescription(dodge, 90, 85))
+      .build();
+    gestureInFlight = true;
+    boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
+      @Override public void onCompleted(GestureDescription g) { gestureInFlight = false; }
+      @Override public void onCancelled(GestureDescription g) { gestureInFlight = false; }
+    }, null);
+    if (!accepted) gestureInFlight = false;
   }
 
   private void tapWithFeedback(float x, float y) {
