@@ -34,6 +34,13 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean periodicDodgeEnabled = true;
   private boolean survivalMode = true;
   private Button survivalButton;
+  private Button rotationButton;
+  private boolean rotationEnabled = false;
+  private int rotationSlot = 0;
+  private long nextRotationAt;
+  // Placeholder normalized locations: must be calibrated before enabling rotation.
+  private final float[] heroSlotX = {0.93f, 0.93f, 0.93f, 0.93f};
+  private final float[] heroSlotY = {0.24f, 0.34f, 0.44f, 0.54f};
   private long nextPeriodicDodgeAt;
   private long nextAttackAt;
   private long dodgePriorityUntil;
@@ -147,6 +154,12 @@ public class CombatAccessibilityService extends AccessibilityService {
         nextPeriodicDodgeAt = now + (survivalMode ? 1200L : 2000L);
         onIncomingAttackDetected();
       }
+      if (rotationEnabled && now >= nextRotationAt && !gestureInFlight && now >= dodgePriorityUntil) {
+        rotationSlot = (rotationSlot + 1) % 4;
+        tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
+        nextRotationAt = now + 6500L;
+        nextAttackAt = now + 800L;
+      }
       if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
         tap(attackX, attackY);
         nextAttackAt = now + (survivalMode ? 1050L : 650L);
@@ -199,6 +212,7 @@ public class CombatAccessibilityService extends AccessibilityService {
       showJoystickMarker();
       showDodgeTestButton();
       showSurvivalButton();
+      showRotationButton();
     } catch (RuntimeException e) {
       overlayButton = null;
     }
@@ -298,6 +312,31 @@ public class CombatAccessibilityService extends AccessibilityService {
     windowManager.addView(joystickMarker, joystickMarkerParams);
   }
 
+  private void showRotationButton() {
+    rotationButton = new Button(this);
+    rotationButton.setAllCaps(false);
+    rotationButton.setAlpha(0.45f);
+    rotationButton.setText("ROTATION AUS");
+    rotationButton.setOnClickListener(v -> {
+      rotationEnabled = !rotationEnabled;
+      rotationSlot = 0;
+      nextRotationAt = SystemClock.uptimeMillis() + 6500L;
+      rotationButton.setText(rotationEnabled ? "ROTATION AN" : "ROTATION AUS");
+      Toast.makeText(this, rotationEnabled
+        ? "Testrotation: Slotpositionen vor Einsatz pruefen!"
+        : "Rotation deaktiviert", Toast.LENGTH_LONG).show();
+    });
+    WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+      WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+      PixelFormat.TRANSLUCENT);
+    p.gravity = Gravity.TOP | Gravity.LEFT;
+    p.x = Math.round(screenW * 0.40f);
+    p.y = 290;
+    windowManager.addView(rotationButton, p);
+  }
+
   private void showSurvivalButton() {
     survivalButton = new Button(this);
     survivalButton.setAllCaps(false);
@@ -364,6 +403,10 @@ public class CombatAccessibilityService extends AccessibilityService {
   @Override public void onDestroy() {
     stopDodgeTest();
     stopCombat();
+    if (windowManager != null && rotationButton != null) {
+      windowManager.removeView(rotationButton);
+      rotationButton = null;
+    }
     if (windowManager != null && survivalButton != null) {
       windowManager.removeView(survivalButton);
       survivalButton = null;
@@ -396,6 +439,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     joystickY = screenH * getPreferences(MODE_PRIVATE).getFloat("joystickY", 0.78f);
     dodgeLeftNext = true;
     lastDodgeAt = 0L;
+    rotationSlot = 0;
+    nextRotationAt = SystemClock.uptimeMillis() + 6500L;
     nextPeriodicDodgeAt = SystemClock.uptimeMillis() + 1000L;
     nextAttackAt = 0L;
     dodgePriorityUntil = 0L;
