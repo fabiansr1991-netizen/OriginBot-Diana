@@ -44,7 +44,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final float[] skillY = {0.67f, 0.64f, 0.70f};
   private int skillStep = 0;
   private final long[] skillReadyAt = new long[3];
-  private static final long SKILL_RETRY_MS = 4800L;
+  private static final long SKILL_RETRY_MS = 1800L;
   private long nextHeroSwitchAt = 0L;
   private long nextCameraSweepAt = 0L;
   private long nextTargetAttemptAt = 0L;
@@ -60,7 +60,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   private long lastCounterAt = 0L;
   private boolean threatActive = false;
   private int clearThreatFrames = 0;
-  private static final long REACTION_DELAY_MS = 85L;
+  private static final long REACTION_DELAY_MS = 45L;
   private static final long COUNTER_DELAY_MS = 330L;
   private boolean rotationEnabled = false;
   private boolean autoCalibrating = false;
@@ -132,7 +132,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     }
   };
   private void scheduleScan() {
-    if (running && Build.VERSION.SDK_INT >= 30) handler.postDelayed(scanLoop, 120);
+    if (running && Build.VERSION.SDK_INT >= 30) handler.postDelayed(scanLoop, 65);
   }
   private void analyzeFrame(Bitmap frame) {
     if (!running) return;
@@ -170,7 +170,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     }
     if (!warning) warningPreviouslyVisible = false;
   }
-  private static final long DODGE_COOLDOWN_MS = 750L;
+  private static final long DODGE_COOLDOWN_MS = 480L;
   private float attackX, attackY, dodgeX, dodgeY;
   private WindowManager windowManager;
   private Button overlayButton;
@@ -236,12 +236,12 @@ public class CombatAccessibilityService extends AccessibilityService {
           && now >= dodgePriorityUntil && now >= nextTargetAttemptAt) {
         // Experimental target reticle tap; screenshot does not confirm game behavior.
         tap(screenW * TARGET_X, screenH * TARGET_Y);
-        nextTargetAttemptAt = now + 12000L;
+        nextTargetAttemptAt = now + 5000L;
         nextAttackAt = Math.max(nextAttackAt, now + 250L);
       }
       if (!gestureInFlight && !dodgeQueued && now >= dodgePriorityUntil && now >= nextCameraSweepAt && !threatActive) {
         cameraSweep();
-        nextCameraSweepAt = now + 4500L;
+        nextCameraSweepAt = now + 1600L;
         nextAttackAt = Math.max(nextAttackAt, now + 280L);
       }
       if (!gestureInFlight && !dodgeQueued && now >= dodgePriorityUntil && now >= nextAttackAt) {
@@ -261,20 +261,20 @@ public class CombatAccessibilityService extends AccessibilityService {
         } else if (screenW > screenH && now >= nextUltimateAttemptAt) {
           // Screenshot-derived glowing ultimate icon. Attempt sparingly; availability not yet verified.
           tap(screenW * ultimateX, screenH * ultimateY);
-          nextUltimateAttemptAt = now + 18000L;
-          nextAttackAt = now + 650L;
+          nextUltimateAttemptAt = now + 2200L;
+          nextAttackAt = now + 260L;
         } else if (readySkill >= 0) {
           tap(screenW * skillX[readySkill], screenH * skillY[readySkill]);
           skillReadyAt[readySkill] = now + SKILL_RETRY_MS;
           skillStep = (readySkill + 1) % 3;
-          nextAttackAt = now + 310L;
+          nextAttackAt = now + 175L;
 
         } else {
           tap(attackX, attackY);
-          nextAttackAt = now + 340L;
+          nextAttackAt = now + 190L;
         }
       }
-      if (running) handler.postDelayed(this, 40L);
+      if (running) handler.postDelayed(this, 20L);
     }
   };
 
