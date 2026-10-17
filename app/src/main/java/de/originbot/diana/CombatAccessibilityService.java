@@ -38,6 +38,8 @@ public class CombatAccessibilityService extends AccessibilityService {
   private Button calibrationTestButton;
   private int calibrationTestSlot = 0;
   private boolean rotationEnabled = false;
+  private boolean autoCalibrating = false;
+  private Button autoCalibrationButton;
   private int rotationSlot = 0;
   private long nextRotationAt;
   private final float[] heroSlotX = {0.93f, 0.93f, 0.93f, 0.93f};
@@ -247,6 +249,7 @@ public class CombatAccessibilityService extends AccessibilityService {
       showHeroMarkers();
       showAttackMarker();
       showCalibrationTestButton();
+      showAutoCalibrationButton();
     } catch (RuntimeException e) {
       overlayButton = null;
     }
@@ -425,6 +428,110 @@ public class CombatAccessibilityService extends AccessibilityService {
     });
   }
 
+  private void showAutoCalibrationButton() {
+    autoCalibrationButton = new Button(this);
+    autoCalibrationButton.setText("AUTO SUCHEN");
+    autoCalibrationButton.setTextSize(10);
+    autoCalibrationButton.setAllCaps(false);
+    autoCalibrationButton.setAlpha(0.45f);
+    autoCalibrationButton.setOnClickListener(v -> {
+      if (running || screenshotPending || Build.VERSION.SDK_INT < 30) {
+        Toast.makeText(this, "Bot stoppen / Screenshot nicht bereit", Toast.LENGTH_SHORT).show();
+        return;
+      }
+      autoCalibrating = true;
+      autoCalibrationButton.setText("SUCHT...");
+      takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
+        @Override public void onSuccess(ScreenshotResult result) {
+          Bitmap frame = null, readable = null;
+          try {
+            frame = Bitmap.wrapHardwareBuffer(result.getHardwareBuffer(), result.getColorSpace());
+            if (frame != null) readable = frame.copy(Bitmap.Config.ARGB_8888, false);
+            if (readable != null) detectHeroSlots(readable);
+            else Toast.makeText(CombatAccessibilityService.this, "Bild nicht lesbar", Toast.LENGTH_LONG).show();
+          } catch (RuntimeException e) {
+            Toast.makeText(CombatAccessibilityService.this, "Erkennung fehlgeschlagen", Toast.LENGTH_LONG).show();
+          } finally {
+            if (readable != null) readable.recycle();
+            if (frame != null) frame.recycle();
+            result.getHardwareBuffer().close();
+            autoCalibrating = false;
+            autoCalibrationButton.setText("AUTO SUCHEN");
+          }
+        }
+        @Override public void onFailure(int errorCode) {
+          autoCalibrating = false;
+          autoCalibrationButton.setText("AUTO SUCHEN");
+          Toast.makeText(CombatAccessibilityService.this, "Screenshot nicht erlaubt", Toast.LENGTH_LONG).show();
+        }
+      });
+    });
+    WindowManager.LayoutParams p = calibrationParams(0.40f, 0.64f);
+    p.x = Math.round(screenW * 0.40f);
+    p.y = 470;
+    windowManager.addView(autoCalibrationButton, p);
+  }
+
+  // Conservative heuristic: find four similarly sized bright circular portrait outlines
+  // in the rightmost 30% of a landscape screenshot. No coordinates are saved on weak matches.
+  private void detectHeroSlots(Bitmap image) {
+    int w = image.getWidth(), h = image.getHeight();
+    if (w <= h) {
+      Toast.makeText(this, "Automatik nur im Querformat", Toast.LENGTH_LONG).show();
+      return;
+    }
+    java.util.ArrayList<int[]> candidates = new java.util.ArrayList<>();
+    int radius = Math.max(10, Math.round(h * 0.035f));
+    int step = Math.max(5, radius / 3);
+    for (int y = radius * 2; y < h - radius * 2; y += step) {
+      for (int x = w * 72 / 100; x < w - radius * 2; x += step) {
+        int bright = 0, tested = 0;
+        for (int a = 0; a < 12; a++) {
+          double angle = a * Math.PI / 6;
+          int px = x + (int)(radius * Math.cos(angle));
+          int py = y + (int)(radius * Math.sin(angle));
+          int c = image.getPixel(px, py);
+          int max = Math.max(Color.red(c), Math.max(Color.green(c), Color.blue(c)));
+          int min = Math.min(Color.red(c), Math.min(Color.green(c), Color.blue(c)));
+          if (max > 175 && max - min < 100) bright++;
+          tested++;
+        }
+        if (bright < 9) continue;
+        boolean nearby = false;
+        for (int[] p : candidates) if (Math.abs(p[0] - x) < radius && Math.abs(p[1] - y) < radius) { nearby = true; break; }
+        if (!nearby) candidates.add(new int[]{x,y});
+      }
+    }
+    // Ambiguous visual matches must never silently overwrite calibration.
+    if (candidates.size() != 4) {
+      Toast.makeText(this, "Keine eindeutigen 4 Charaktertasten erkannt (" + candidates.size() + "). Manuell H1-H4 setzen.", Toast.LENGTH_LONG).show();
+      return;
+    }
+    java.util.Collections.sort(candidates, (a,b) -> Integer.compare(a[1], b[1]));
+    int minGap = Math.max(radius * 2, h / 14);
+    for (int i = 1; i < 4; i++) {
+      if (candidates.get(i)[1] - candidates.get(i-1)[1] < minGap ||
+          Math.abs(candidates.get(i)[0] - candidates.get(0)[0]) > radius) {
+        Toast.makeText(this, "Treffer nicht plausibel. H1-H4 manuell setzen.", Toast.LENGTH_LONG).show();
+        return;
+      }
+    }
+    android.content.SharedPreferences.Editor edit = getPreferences(MODE_PRIVATE).edit();
+    for (int i = 0; i < 4; i++) {
+      float x = candidates.get(i)[0] / (float)w, y = candidates.get(i)[1] / (float)h;
+      heroSlotX[i] = x; heroSlotY[i] = y;
+      edit.putFloat(heroKey(i, "X"), x).putFloat(heroKey(i, "Y"), y)
+          .putBoolean("heroSet" + i + "L", true);
+      if (heroMarkers[i] != null) {
+        heroMarkerParams[i].x = Math.round(screenW * x) - heroMarkers[i].getWidth() / 2;
+        heroMarkerParams[i].y = Math.round(screenH * y) - heroMarkers[i].getHeight() / 2;
+        windowManager.updateViewLayout(heroMarkers[i], heroMarkerParams[i]);
+      }
+    }
+    edit.apply();
+    Toast.makeText(this, "Vier Kandidaten gefunden: H1-H4 TEST vor Rotation pruefen", Toast.LENGTH_LONG).show();
+  }
+
   private void showCalibrationTestButton() {
     calibrationTestButton = new Button(this);
     calibrationTestButton.setText("H1 TEST");
@@ -550,6 +657,10 @@ public class CombatAccessibilityService extends AccessibilityService {
       }
       if (attackMarker != null) { windowManager.removeView(attackMarker); attackMarker = null; }
     }
+    if (windowManager != null && autoCalibrationButton != null) {
+      windowManager.removeView(autoCalibrationButton);
+      autoCalibrationButton = null;
+    }
     if (windowManager != null && calibrationTestButton != null) {
       windowManager.removeView(calibrationTestButton);
       calibrationTestButton = null;
@@ -604,6 +715,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (joystickMarker != null) joystickMarker.setVisibility(View.GONE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
     if (calibrationTestButton != null) calibrationTestButton.setVisibility(View.GONE);
+    if (autoCalibrationButton != null) autoCalibrationButton.setVisibility(View.GONE);
     for (Button b : heroMarkers) if (b != null) b.setVisibility(View.GONE);
     if (attackMarker != null) attackMarker.setVisibility(View.GONE);
     handler.post(loop);
@@ -618,6 +730,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (joystickMarker != null) joystickMarker.setVisibility(View.VISIBLE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
     if (calibrationTestButton != null) calibrationTestButton.setVisibility(View.VISIBLE);
+    if (autoCalibrationButton != null) autoCalibrationButton.setVisibility(View.VISIBLE);
     for (Button b : heroMarkers) if (b != null) b.setVisibility(View.VISIBLE);
     if (attackMarker != null) attackMarker.setVisibility(View.VISIBLE);
     updateOverlay();
