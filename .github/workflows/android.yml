@@ -34,21 +34,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Restore stable signing key
-        shell: bash
-        env:
-          ORIGINBOT_KEYSTORE_BASE64: ${{ secrets.ORIGINBOT_KEYSTORE_BASE64 }}
-          ORIGINBOT_STORE_PASSWORD: ${{ secrets.ORIGINBOT_STORE_PASSWORD }}
-          ORIGINBOT_KEY_PASSWORD: ${{ secrets.ORIGINBOT_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          test -n "$ORIGINBOT_KEYSTORE_BASE64" || { echo "Missing ORIGINBOT_KEYSTORE_BASE64 repository secret"; exit 1; }
-          test -n "$ORIGINBOT_STORE_PASSWORD" || { echo "Missing ORIGINBOT_STORE_PASSWORD repository secret"; exit 1; }
-          test -n "$ORIGINBOT_KEY_PASSWORD" || { echo "Missing ORIGINBOT_KEY_PASSWORD repository secret"; exit 1; }
-          printf '%s' "$ORIGINBOT_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/originbot-upload.jks"
-          echo "ORIGINBOT_KEYSTORE_PATH=$RUNNER_TEMP/originbot-upload.jks" >> "$GITHUB_ENV"
-          echo "ORIGINBOT_STORE_PASSWORD=$ORIGINBOT_STORE_PASSWORD" >> "$GITHUB_ENV"
-          echo "ORIGINBOT_KEY_PASSWORD=$ORIGINBOT_KEY_PASSWORD" >> "$GITHUB_ENV"
       - name: Build and save diagnostic log
         shell: bash
         run: |
