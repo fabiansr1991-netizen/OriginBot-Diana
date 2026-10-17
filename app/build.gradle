@@ -2,23 +2,6 @@ plugins { id 'com.android.application' }
 android {
     namespace 'de.originbot.diana'
     compileSdk 35
-    defaultConfig {
-        applicationId 'de.originbot.diana'
-        minSdk 26
-        targetSdk 35
-        versionCode Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '41')
-        versionName '0.3'
-    }
-    signingConfigs {
-        stableDebug {
-            storeFile file(System.getenv('ORIGINBOT_KEYSTORE_PATH') ?: 'originbot-signing-missing.jks')
-            storePassword System.getenv('ORIGINBOT_STORE_PASSWORD') ?: ''
-            keyAlias 'originbot'
-            keyPassword System.getenv('ORIGINBOT_KEY_PASSWORD') ?: ''
-        }
-    }
-    buildTypes {
-        debug { signingConfig signingConfigs.stableDebug }
-    }
+    defaultConfig { applicationId 'de.originbot.diana'; minSdk 26; targetSdk 35; versionCode Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '41'); versionName '0.3' }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
