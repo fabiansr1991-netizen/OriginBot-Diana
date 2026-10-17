@@ -29,6 +29,8 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean gestureInFlight;
   private boolean dodgeLeftNext = true;
   private float joystickX, joystickY;
+  private Button joystickMarker;
+  private WindowManager.LayoutParams joystickMarkerParams;
   private boolean periodicDodgeEnabled = true;
   private boolean survivalMode = true;
   private Button survivalButton;
@@ -124,6 +126,11 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (windowManager == null) return;
     refreshScreen();
     if (running) stopCombat();
+    if (joystickMarker != null && joystickMarkerParams != null) {
+      joystickMarkerParams.x = Math.round(screenW * getPreferences(MODE_PRIVATE).getFloat("joystickX", 0.14f)) - joystickMarker.getWidth() / 2;
+      joystickMarkerParams.y = Math.round(screenH * getPreferences(MODE_PRIVATE).getFloat("joystickY", 0.78f)) - joystickMarker.getHeight() / 2;
+      windowManager.updateViewLayout(joystickMarker, joystickMarkerParams);
+    }
     if (dodgeMarker != null && markerParams != null) {
       markerParams.x = Math.max(0, Math.round(screenW * getPreferences(MODE_PRIVATE).getFloat(keyX(), 0.90f)) - dodgeMarker.getWidth() / 2);
       markerParams.y = Math.max(0, Math.round(screenH * getPreferences(MODE_PRIVATE).getFloat(keyY(), 0.88f)) - dodgeMarker.getHeight() / 2);
@@ -189,6 +196,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     try {
       windowManager.addView(overlayButton, params);
       showDodgeMarker();
+      showJoystickMarker();
       showDodgeTestButton();
       showSurvivalButton();
     } catch (RuntimeException e) {
@@ -246,6 +254,48 @@ public class CombatAccessibilityService extends AccessibilityService {
       }
     });
     windowManager.addView(dodgeMarker, markerParams);
+  }
+
+  private void showJoystickMarker() {
+    joystickMarker = new Button(this);
+    joystickMarker.setText("STICK");
+    joystickMarker.setTextSize(10);
+    joystickMarker.setAllCaps(false);
+    joystickMarker.setAlpha(0.45f);
+    joystickMarker.setPadding(4, 2, 4, 2);
+    joystickMarkerParams = new WindowManager.LayoutParams(
+      WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+      PixelFormat.TRANSLUCENT);
+    joystickMarkerParams.gravity = Gravity.TOP | Gravity.LEFT;
+    joystickMarkerParams.x = Math.round(screenW * getPreferences(MODE_PRIVATE).getFloat("joystickX", 0.14f)) - 24;
+    joystickMarkerParams.y = Math.round(screenH * getPreferences(MODE_PRIVATE).getFloat("joystickY", 0.78f)) - 20;
+    joystickMarker.setOnTouchListener(new View.OnTouchListener() {
+      float downX, downY;
+      int startX, startY;
+      @Override public boolean onTouch(View v, MotionEvent event) {
+        switch (event.getActionMasked()) {
+          case MotionEvent.ACTION_DOWN:
+            downX = event.getRawX(); downY = event.getRawY();
+            startX = joystickMarkerParams.x; startY = joystickMarkerParams.y;
+            return true;
+          case MotionEvent.ACTION_MOVE:
+            joystickMarkerParams.x = Math.max(0, Math.min(screenW - joystickMarker.getWidth(), startX + Math.round(event.getRawX() - downX)));
+            joystickMarkerParams.y = Math.max(0, Math.min(screenH - joystickMarker.getHeight(), startY + Math.round(event.getRawY() - downY)));
+            windowManager.updateViewLayout(joystickMarker, joystickMarkerParams);
+            return true;
+          case MotionEvent.ACTION_UP:
+            getPreferences(MODE_PRIVATE).edit()
+              .putFloat("joystickX", (joystickMarkerParams.x + joystickMarker.getWidth() / 2f) / screenW)
+              .putFloat("joystickY", (joystickMarkerParams.y + joystickMarker.getHeight() / 2f) / screenH)
+              .apply();
+            return true;
+          default: return true;
+        }
+      }
+    });
+    windowManager.addView(joystickMarker, joystickMarkerParams);
   }
 
   private void showSurvivalButton() {
@@ -322,6 +372,10 @@ public class CombatAccessibilityService extends AccessibilityService {
       windowManager.removeView(dodgeTestButton);
       dodgeTestButton = null;
     }
+    if (windowManager != null && joystickMarker != null) {
+      windowManager.removeView(joystickMarker);
+      joystickMarker = null;
+    }
     if (windowManager != null && dodgeMarker != null) {
       windowManager.removeView(dodgeMarker);
       dodgeMarker = null;
@@ -338,8 +392,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     stopDodgeTest();
     stopCombat();
     attackX = ax; attackY = ay; dodgeX = dx; dodgeY = dy;
-    joystickX = screenW * 0.061f;
-    joystickY = screenH * 0.79f;
+    joystickX = screenW * getPreferences(MODE_PRIVATE).getFloat("joystickX", 0.14f);
+    joystickY = screenH * getPreferences(MODE_PRIVATE).getFloat("joystickY", 0.78f);
     dodgeLeftNext = true;
     lastDodgeAt = 0L;
     nextPeriodicDodgeAt = SystemClock.uptimeMillis() + 1000L;
@@ -351,6 +405,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     running = true;
     updateOverlay();
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
+    if (joystickMarker != null) joystickMarker.setVisibility(View.GONE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
     handler.post(loop);
     scheduleScan();
@@ -361,6 +416,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     handler.removeCallbacks(loop);
     handler.removeCallbacks(scanLoop);
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
+    if (joystickMarker != null) joystickMarker.setVisibility(View.VISIBLE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
     updateOverlay();
   }
