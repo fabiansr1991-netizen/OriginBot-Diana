@@ -46,6 +46,8 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final long[] skillReadyAt = new long[3];
   private static final long SKILL_RETRY_MS = 4800L;
   private long nextHeroSwitchAt = 0L;
+  private long nextCameraSweepAt = 0L;
+  private boolean cameraSweepRight = true;
   private long nextUltimateAttemptAt = 0L;
   private float ultimateX = 1061f / 1536f;
   private float ultimateY = 539f / 709f;
@@ -229,6 +231,11 @@ public class CombatAccessibilityService extends AccessibilityService {
           && now - lastThreatAt > 1500L && !threatActive) {
         nextPeriodicDodgeAt = now + 1400L;
         onIncomingAttackDetected();
+      }
+      if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextCameraSweepAt && !threatActive) {
+        cameraSweep();
+        nextCameraSweepAt = now + 6500L;
+        nextAttackAt = Math.max(nextAttackAt, now + 280L);
       }
       if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
         // Limit skill retries to avoid hammering buttons during cooldowns.
@@ -829,6 +836,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     skillStep = 0;
     for (int i = 0; i < 3; i++) skillReadyAt[i] = 0L;
     nextHeroSwitchAt = SystemClock.uptimeMillis() + 2900L;
+    nextCameraSweepAt = SystemClock.uptimeMillis() + 3500L;
     nextUltimateAttemptAt = SystemClock.uptimeMillis() + 1600L;
     rotationEnabled = true;
     periodicDodgeEnabled = true;
@@ -911,6 +919,26 @@ public class CombatAccessibilityService extends AccessibilityService {
   }
 
   /** Prefer a direct dodge tap: some games ignore simultaneous accessibility strokes. */
+  // Short swipe through the clear upper-right play area, away from action controls.
+  private void cameraSweep() {
+    if (gestureInFlight || screenW <= screenH) return;
+    float fromX = screenW * (cameraSweepRight ? 0.57f : 0.71f);
+    float toX = screenW * (cameraSweepRight ? 0.71f : 0.57f);
+    float y = screenH * 0.36f;
+    cameraSweepRight = !cameraSweepRight;
+    Path path = new Path();
+    path.moveTo(fromX, y);
+    path.lineTo(toX, y);
+    GestureDescription gesture = new GestureDescription.Builder()
+      .addStroke(new GestureDescription.StrokeDescription(path, 0, 250)).build();
+    gestureInFlight = true;
+    boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
+      @Override public void onCompleted(GestureDescription g) { gestureFinished(); }
+      @Override public void onCancelled(GestureDescription g) { gestureFinished(); }
+    }, null);
+    if (!accepted) gestureFinished();
+  }
+
   private void directedDodge() {
     if (gestureInFlight) { dodgeQueued = true; return; }
     Path dodge = new Path();
