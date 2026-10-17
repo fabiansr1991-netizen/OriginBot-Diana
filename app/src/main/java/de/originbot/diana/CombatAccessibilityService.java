@@ -29,6 +29,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean gestureInFlight;
   private boolean dodgeQueued;
   private boolean dodgeLeftNext = true;
+  private float dangerDirectionX = 0f, dangerDirectionY = -1f;
   private float joystickX, joystickY;
   private Button joystickMarker;
   private WindowManager.LayoutParams joystickMarkerParams;
@@ -138,6 +139,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (!running) return;
     int w = frame.getWidth(), h = frame.getHeight();
     int hits = 0, samples = 0;
+    float weightedX = 0f, weightedY = 0f;
     // Central battlefield only: exclude red HP bars and action buttons at the edges.
     for (int y = h * 38 / 100; y < h * 82 / 100; y += Math.max(3, h / 85)) {
       for (int x = w * 23 / 100; x < w * 76 / 100; x += Math.max(3, w / 115)) {
@@ -145,13 +147,19 @@ public class CombatAccessibilityService extends AccessibilityService {
         int r = Color.red(c), g = Color.green(c), b = Color.blue(c);
         boolean redWarning = r > 155 && r > g * 1.75f && r > b * 1.55f && g < 135;
         boolean blueWarning = b > 155 && b > r * 1.45f && b > g * 1.15f && r < 145;
-        if (redWarning || blueWarning) hits++;
+        if (redWarning || blueWarning) { hits++; weightedX += x; weightedY += y; }
         samples++;
       }
     }
     boolean warning = samples > 0 && hits > 12 && hits * 100 > samples;
     warningFrames = warning ? Math.min(3, warningFrames + 1) : 0;
     if (warning) {
+      // Move away from the warning centroid, with a fallback if it overlaps the hero.
+      float cx = weightedX / Math.max(1, hits), cy = weightedY / Math.max(1, hits);
+      float dx = w * 0.50f - cx, dy = h * 0.66f - cy;
+      float magnitude = (float)Math.hypot(dx, dy);
+      if (magnitude > w * 0.035f) { dangerDirectionX = dx / magnitude; dangerDirectionY = dy / magnitude; }
+      else { dangerDirectionX = dodgeLeftNext ? -1f : 1f; dangerDirectionY = -0.25f; dodgeLeftNext = !dodgeLeftNext; }
       clearThreatFrames = 0;
       if (!threatActive) {
         threatActive = true;
@@ -948,10 +956,20 @@ public class CombatAccessibilityService extends AccessibilityService {
 
   private void directedDodge() {
     if (gestureInFlight) { dodgeQueued = true; return; }
+    // Steering joystick and dodge button in one atomic multi-touch gesture.
+    // Direction is estimated from screen warning pixels, not verified game geometry.
+    float dx = dangerDirectionX, dy = dangerDirectionY;
+    float length = (float)Math.hypot(dx, dy);
+    if (length < 0.1f) { dx = -1f; dy = 0f; length = 1f; }
+    float reach = Math.min(screenW, screenH) * 0.085f;
+    Path stick = new Path();
+    stick.moveTo(joystickX, joystickY);
+    stick.lineTo(joystickX + reach * dx / length, joystickY + reach * dy / length);
     Path dodge = new Path();
     dodge.moveTo(dodgeX, dodgeY);
     GestureDescription gesture = new GestureDescription.Builder()
-      .addStroke(new GestureDescription.StrokeDescription(dodge, 0, 65)).build();
+      .addStroke(new GestureDescription.StrokeDescription(stick, 0, 155))
+      .addStroke(new GestureDescription.StrokeDescription(dodge, 35, 65)).build();
     gestureInFlight = true;
     boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
       @Override public void onCompleted(GestureDescription g) { gestureFinished(); }
