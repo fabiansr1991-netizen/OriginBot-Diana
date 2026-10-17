@@ -2,6 +2,6 @@ plugins { id 'com.android.application' }
 android {
     namespace 'de.originbot.diana'
     compileSdk 35
-    defaultConfig { applicationId 'de.originbot.diana'; minSdk 26; targetSdk 35; versionCode (System.getenv('GITHUB_RUN_NUMBER') ?: '41').toInteger(); versionName '0.2' }
+    defaultConfig { applicationId 'de.originbot.diana'; minSdk 26; targetSdk 35; versionCode Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '41'); versionName '0.2' }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
