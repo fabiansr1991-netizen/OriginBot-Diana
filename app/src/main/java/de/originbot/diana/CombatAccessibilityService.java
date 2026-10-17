@@ -26,6 +26,9 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final Handler handler = new Handler(Looper.getMainLooper());
   private boolean running;
   private boolean dodgeTestRunning;
+  private boolean gestureInFlight;
+  private long nextAttackAt;
+  private long dodgePriorityUntil;
   private float testDodgeX, testDodgeY;
   private final Runnable repeatedDodgeTest = new Runnable() {
     @Override public void run() {
@@ -125,8 +128,12 @@ public class CombatAccessibilityService extends AccessibilityService {
   private final Runnable loop = new Runnable() {
     @Override public void run() {
       if (!running) return;
-      tap(attackX, attackY);
-      if (running) handler.postDelayed(this, 650);
+      long now = SystemClock.uptimeMillis();
+      if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
+        tap(attackX, attackY);
+        nextAttackAt = now + 650L;
+      }
+      if (running) handler.postDelayed(this, 100L);
     }
   };
 
@@ -289,6 +296,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     stopCombat();
     attackX = ax; attackY = ay; dodgeX = dx; dodgeY = dy;
     lastDodgeAt = 0L;
+    nextAttackAt = 0L;
+    dodgePriorityUntil = 0L;
     lastWarningAt = 0L;
     warningFrames = 0;
     warningPreviouslyVisible = false;
@@ -321,9 +330,10 @@ public class CombatAccessibilityService extends AccessibilityService {
     long now = android.os.SystemClock.uptimeMillis();
     if (now - lastDodgeAt < DODGE_COOLDOWN_MS) return;
     lastDodgeAt = now;
+    dodgePriorityUntil = now + 400L;
     handler.removeCallbacks(loop);
     tap(dodgeX, dodgeY);
-    handler.postDelayed(loop, 350);
+    handler.postDelayed(loop, 400L);
   }
 
   private void tapWithFeedback(float x, float y) {
@@ -335,18 +345,28 @@ public class CombatAccessibilityService extends AccessibilityService {
   }
 
   private void sendTap(float x, float y, boolean feedback) {
+    if (gestureInFlight) {
+      if (feedback) Toast.makeText(this, "Geste noch aktiv", Toast.LENGTH_SHORT).show();
+      return;
+    }
     Path path = new Path();
     path.moveTo(x, y);
     GestureDescription gesture = new GestureDescription.Builder()
       .addStroke(new GestureDescription.StrokeDescription(path, 0, 80)).build();
-    boolean accepted = dispatchGesture(gesture, feedback ? new GestureResultCallback() {
+    gestureInFlight = true;
+    boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
       @Override public void onCompleted(GestureDescription g) {
-        Toast.makeText(CombatAccessibilityService.this, "Ausweich-Beruehrung ausgefuehrt", Toast.LENGTH_SHORT).show();
+        gestureInFlight = false;
+        if (feedback) Toast.makeText(CombatAccessibilityService.this, "Ausweich-Beruehrung ausgefuehrt", Toast.LENGTH_SHORT).show();
       }
       @Override public void onCancelled(GestureDescription g) {
-        Toast.makeText(CombatAccessibilityService.this, "Ausweich-Beruehrung abgebrochen", Toast.LENGTH_SHORT).show();
+        gestureInFlight = false;
+        if (feedback) Toast.makeText(CombatAccessibilityService.this, "Ausweich-Beruehrung abgebrochen", Toast.LENGTH_SHORT).show();
       }
-    } : null, null);
-    if (feedback && !accepted) Toast.makeText(this, "Ausweich-Beruehrung nicht angenommen", Toast.LENGTH_SHORT).show();
+    }, null);
+    if (!accepted) {
+      gestureInFlight = false;
+      if (feedback) Toast.makeText(this, "Ausweich-Beruehrung nicht angenommen", Toast.LENGTH_SHORT).show();
+    }
   }
 }
