@@ -47,6 +47,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   private static final long SKILL_RETRY_MS = 4800L;
   private long nextHeroSwitchAt = 0L;
   private long nextCameraSweepAt = 0L;
+  private long lastCombatActionAt = 0L;
   private boolean cameraSweepRight = true;
   private long nextUltimateAttemptAt = 0L;
   private float ultimateX = 1061f / 1536f;
@@ -232,12 +233,12 @@ public class CombatAccessibilityService extends AccessibilityService {
         nextPeriodicDodgeAt = now + 1400L;
         onIncomingAttackDetected();
       }
-      if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextCameraSweepAt && !threatActive) {
+      if (!gestureInFlight && !dodgeQueued && now >= dodgePriorityUntil && now >= nextCameraSweepAt && !threatActive && now - lastThreatAt > 1800L) {
         cameraSweep();
-        nextCameraSweepAt = now + 6500L;
+        nextCameraSweepAt = now + 8000L;
         nextAttackAt = Math.max(nextAttackAt, now + 280L);
       }
-      if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
+      if (!gestureInFlight && !dodgeQueued && now >= dodgePriorityUntil && now >= nextAttackAt) {
         // Limit skill retries to avoid hammering buttons during cooldowns.
         int readySkill = -1;
         for (int offset = 0; offset < 3; offset++) {
@@ -248,7 +249,7 @@ public class CombatAccessibilityService extends AccessibilityService {
           // Rotation must take priority even while abilities keep becoming ready.
           tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
           rotationSlot = (rotationSlot + 1) % 3;
-          nextHeroSwitchAt = now + 2900L;
+          nextHeroSwitchAt = now + 3600L;
           for (int i = 0; i < 3; i++) skillReadyAt[i] = now + 500L;
           nextAttackAt = now + 570L;
         } else if (screenW > screenH && now >= nextUltimateAttemptAt) {
@@ -835,7 +836,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     rotationSlot = 0;
     skillStep = 0;
     for (int i = 0; i < 3; i++) skillReadyAt[i] = 0L;
-    nextHeroSwitchAt = SystemClock.uptimeMillis() + 2900L;
+    nextHeroSwitchAt = SystemClock.uptimeMillis() + 3600L;
     nextCameraSweepAt = SystemClock.uptimeMillis() + 3500L;
     nextUltimateAttemptAt = SystemClock.uptimeMillis() + 1600L;
     rotationEnabled = true;
@@ -921,7 +922,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   /** Prefer a direct dodge tap: some games ignore simultaneous accessibility strokes. */
   // Short swipe through the clear upper-right play area, away from action controls.
   private void cameraSweep() {
-    if (gestureInFlight || screenW <= screenH) return;
+    if (gestureInFlight || dodgeQueued || threatActive || screenW <= screenH) return;
     float fromX = screenW * (cameraSweepRight ? 0.57f : 0.71f);
     float toX = screenW * (cameraSweepRight ? 0.71f : 0.57f);
     float y = screenH * 0.36f;
@@ -987,7 +988,7 @@ public class CombatAccessibilityService extends AccessibilityService {
         if (feedback) Toast.makeText(CombatAccessibilityService.this, "Ausweich-Beruehrung ausgefuehrt", Toast.LENGTH_SHORT).show();
       }
       @Override public void onCancelled(GestureDescription g) {
-        gestureInFlight = false;
+        gestureFinished();
         if (feedback) Toast.makeText(CombatAccessibilityService.this, "Ausweich-Beruehrung abgebrochen", Toast.LENGTH_SHORT).show();
       }
     }, null);
