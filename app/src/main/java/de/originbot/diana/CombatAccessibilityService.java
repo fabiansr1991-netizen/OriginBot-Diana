@@ -234,10 +234,10 @@ public class CombatAccessibilityService extends AccessibilityService {
           skillStep = 4;
           nextAttackAt = now + 310L;
         } else if (rotationEnabled) {
-          rotationSlot = (rotationSlot + 1) % 3;
           tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
+          rotationSlot = (rotationSlot + 1) % 3;
           skillStep = 0;
-          nextAttackAt = now + 460L;
+          nextAttackAt = now + 750L;
         } else {
           // Never tap unverified character positions.
           tap(attackX, attackY);
