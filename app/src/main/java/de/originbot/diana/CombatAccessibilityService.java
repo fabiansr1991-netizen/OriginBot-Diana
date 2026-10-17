@@ -25,6 +25,15 @@ public class CombatAccessibilityService extends AccessibilityService {
   static CombatAccessibilityService instance;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private boolean running;
+  private boolean dodgeTestRunning;
+  private float testDodgeX, testDodgeY;
+  private final Runnable repeatedDodgeTest = new Runnable() {
+    @Override public void run() {
+      if (!dodgeTestRunning) return;
+      tapWithFeedback(testDodgeX, testDodgeY);
+      handler.postDelayed(this, 2000L);
+    }
+  };
   private long lastDodgeAt;
   private boolean screenshotPending;
   private boolean warningPreviouslyVisible;
@@ -223,19 +232,17 @@ public class CombatAccessibilityService extends AccessibilityService {
     dodgeTestButton.setAllCaps(false);
     dodgeTestButton.setOnClickListener(v -> {
       if (running) return;
+      if (dodgeTestRunning) {
+        stopDodgeTest();
+        return;
+      }
       refreshScreen();
-      // Use the actual draggable marker center, avoiding stale preferences and rounding.
-      final float x = dodgeMarker == null ? screenW * 0.90f : markerParams.x + dodgeMarker.getWidth() / 2f;
-      final float y = dodgeMarker == null ? screenH * 0.88f : markerParams.y + dodgeMarker.getHeight() / 2f;
+      testDodgeX = dodgeMarker == null ? screenW * 0.90f : markerParams.x + dodgeMarker.getWidth() / 2f;
+      testDodgeY = dodgeMarker == null ? screenH * 0.88f : markerParams.y + dodgeMarker.getHeight() / 2f;
+      dodgeTestRunning = true;
       if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
-      if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
-      handler.postDelayed(() -> {
-        tapWithFeedback(x, y);
-        handler.postDelayed(() -> {
-          if (!running && dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
-          if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
-        }, 500);
-      }, 350);
+      dodgeTestButton.setText("TEST STOP");
+      handler.postDelayed(repeatedDodgeTest, 350L);
     });
     WindowManager.LayoutParams p = new WindowManager.LayoutParams(
       WindowManager.LayoutParams.WRAP_CONTENT,
@@ -249,9 +256,17 @@ public class CombatAccessibilityService extends AccessibilityService {
     windowManager.addView(dodgeTestButton, p);
   }
 
+  private void stopDodgeTest() {
+    dodgeTestRunning = false;
+    handler.removeCallbacks(repeatedDodgeTest);
+    if (dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
+    if (dodgeTestButton != null) dodgeTestButton.setText("AUSWEICH TEST");
+  }
+
   @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
   @Override public void onInterrupt() { stopCombat(); }
   @Override public void onDestroy() {
+    stopDodgeTest();
     stopCombat();
     if (windowManager != null && dodgeTestButton != null) {
       windowManager.removeView(dodgeTestButton);
@@ -270,6 +285,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   }
 
   public void startCombat(float ax, float ay, float dx, float dy) {
+    stopDodgeTest();
     stopCombat();
     attackX = ax; attackY = ay; dodgeX = dx; dodgeY = dy;
     lastDodgeAt = 0L;
