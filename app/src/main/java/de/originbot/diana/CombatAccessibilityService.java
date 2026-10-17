@@ -28,6 +28,8 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean dodgeTestRunning;
   private boolean gestureInFlight;
   private boolean periodicDodgeEnabled = true;
+  private boolean survivalMode = true;
+  private Button survivalButton;
   private long nextPeriodicDodgeAt;
   private long nextAttackAt;
   private long dodgePriorityUntil;
@@ -133,12 +135,12 @@ public class CombatAccessibilityService extends AccessibilityService {
       long now = SystemClock.uptimeMillis();
       // Fallback for Diana attacks without reliable red telegraphs.
       if (periodicDodgeEnabled && now >= nextPeriodicDodgeAt && !gestureInFlight) {
-        nextPeriodicDodgeAt = now + 2000L;
+        nextPeriodicDodgeAt = now + (survivalMode ? 1200L : 2000L);
         onIncomingAttackDetected();
       }
       if (!gestureInFlight && now >= dodgePriorityUntil && now >= nextAttackAt) {
         tap(attackX, attackY);
-        nextAttackAt = now + 650L;
+        nextAttackAt = now + (survivalMode ? 1050L : 650L);
       }
       if (running) handler.postDelayed(this, 100L);
     }
@@ -186,6 +188,7 @@ public class CombatAccessibilityService extends AccessibilityService {
       windowManager.addView(overlayButton, params);
       showDodgeMarker();
       showDodgeTestButton();
+      showSurvivalButton();
     } catch (RuntimeException e) {
       overlayButton = null;
     }
@@ -243,6 +246,28 @@ public class CombatAccessibilityService extends AccessibilityService {
     windowManager.addView(dodgeMarker, markerParams);
   }
 
+  private void showSurvivalButton() {
+    survivalButton = new Button(this);
+    survivalButton.setAllCaps(false);
+    survivalButton.setAlpha(0.45f);
+    survivalButton.setText("SCHUTZ AN");
+    survivalButton.setOnClickListener(v -> {
+      survivalMode = !survivalMode;
+      survivalButton.setText(survivalMode ? "SCHUTZ AN" : "SCHUTZ AUS");
+      nextPeriodicDodgeAt = SystemClock.uptimeMillis() + 1000L;
+    });
+    WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+      WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+      PixelFormat.TRANSLUCENT);
+    p.gravity = Gravity.TOP | Gravity.LEFT;
+    p.x = Math.round(screenW * 0.40f);
+    p.y = 200;
+    windowManager.addView(survivalButton, p);
+  }
+
   private void showDodgeTestButton() {
     dodgeTestButton = new Button(this);
     dodgeTestButton.setText("AUSWEICH TEST");
@@ -287,6 +312,10 @@ public class CombatAccessibilityService extends AccessibilityService {
   @Override public void onDestroy() {
     stopDodgeTest();
     stopCombat();
+    if (windowManager != null && survivalButton != null) {
+      windowManager.removeView(survivalButton);
+      survivalButton = null;
+    }
     if (windowManager != null && dodgeTestButton != null) {
       windowManager.removeView(dodgeTestButton);
       dodgeTestButton = null;
