@@ -27,6 +27,7 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean running;
   private boolean dodgeTestRunning;
   private boolean gestureInFlight;
+  private boolean dodgeQueued;
   private boolean dodgeLeftNext = true;
   private float joystickX, joystickY;
   private Button joystickMarker;
@@ -805,6 +806,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     joystickX = screenW * getPreferences(MODE_PRIVATE).getFloat("joystickX", 0.14f);
     joystickY = screenH * getPreferences(MODE_PRIVATE).getFloat("joystickY", 0.78f);
     dodgeLeftNext = true;
+    dodgeQueued = false;
     lastDodgeAt = 0L;
     rotationSlot = 0;
     skillStep = 0;
@@ -834,6 +836,7 @@ public class CombatAccessibilityService extends AccessibilityService {
 
   public void stopCombat() {
     running = false;
+    dodgeQueued = false;
     handler.removeCallbacks(loop);
     handler.removeCallbacks(scanLoop);
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
@@ -857,11 +860,12 @@ public class CombatAccessibilityService extends AccessibilityService {
   public void onIncomingAttackDetected() {
     if (!running) return;
     long now = android.os.SystemClock.uptimeMillis();
-    if (now - lastDodgeAt < DODGE_COOLDOWN_MS || gestureInFlight) return;
+    if (now - lastDodgeAt < DODGE_COOLDOWN_MS) return;
+    if (gestureInFlight) { dodgeQueued = true; dodgePriorityUntil = now + 600L; return; }
     lastDodgeAt = now;
     dodgePriorityUntil = now + 450L;
-    // Counter follow-up after a dodge attempt; success is not observable here.
-    if (now - lastCounterAt > 1000L) {
+    // Do not attack during the dodge recovery window.
+    if (false && now - lastCounterAt > 1000L) {
       lastCounterAt = now;
       handler.postDelayed(() -> {
         if (running && !gestureInFlight && SystemClock.uptimeMillis() >= dodgePriorityUntil - 100L) {
@@ -876,27 +880,29 @@ public class CombatAccessibilityService extends AccessibilityService {
     handler.postDelayed(loop, 400L);
   }
 
-  /** Move the virtual joystick sideways while pressing dodge in the same gesture. */
+  /** Prefer a direct dodge tap: some games ignore simultaneous accessibility strokes. */
   private void directedDodge() {
-    if (gestureInFlight) return;
-    float radius = screenW * 0.038f;
-    float direction = dodgeLeftNext ? -1f : 1f;
-    dodgeLeftNext = !dodgeLeftNext;
-    Path joystick = new Path();
-    joystick.moveTo(joystickX, joystickY);
-    joystick.lineTo(joystickX + direction * radius, joystickY);
+    if (gestureInFlight) { dodgeQueued = true; return; }
     Path dodge = new Path();
     dodge.moveTo(dodgeX, dodgeY);
     GestureDescription gesture = new GestureDescription.Builder()
-      .addStroke(new GestureDescription.StrokeDescription(joystick, 0, 230))
-      .addStroke(new GestureDescription.StrokeDescription(dodge, 90, 85))
-      .build();
+      .addStroke(new GestureDescription.StrokeDescription(dodge, 0, 65)).build();
     gestureInFlight = true;
     boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
-      @Override public void onCompleted(GestureDescription g) { gestureInFlight = false; }
-      @Override public void onCancelled(GestureDescription g) { gestureInFlight = false; }
+      @Override public void onCompleted(GestureDescription g) { gestureFinished(); }
+      @Override public void onCancelled(GestureDescription g) { gestureFinished(); }
     }, null);
-    if (!accepted) gestureInFlight = false;
+    if (!accepted) gestureFinished();
+  }
+
+  private void gestureFinished() {
+    gestureInFlight = false;
+    if (running && dodgeQueued) {
+      dodgeQueued = false;
+      lastDodgeAt = SystemClock.uptimeMillis();
+      dodgePriorityUntil = lastDodgeAt + 500L;
+      handler.post(this::directedDodge);
+    }
   }
 
   private void tapWithFeedback(float x, float y) {
@@ -919,7 +925,7 @@ public class CombatAccessibilityService extends AccessibilityService {
     gestureInFlight = true;
     boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
       @Override public void onCompleted(GestureDescription g) {
-        gestureInFlight = false;
+        gestureFinished();
         if (feedback) Toast.makeText(CombatAccessibilityService.this, "Ausweich-Beruehrung ausgefuehrt", Toast.LENGTH_SHORT).show();
       }
       @Override public void onCancelled(GestureDescription g) {
@@ -928,7 +934,7 @@ public class CombatAccessibilityService extends AccessibilityService {
       }
     }, null);
     if (!accepted) {
-      gestureInFlight = false;
+      gestureFinished();
       if (feedback) Toast.makeText(this, "Ausweich-Beruehrung nicht angenommen", Toast.LENGTH_SHORT).show();
     }
   }
