@@ -38,9 +38,24 @@ public class CombatAccessibilityService extends AccessibilityService {
   private boolean rotationEnabled = false;
   private int rotationSlot = 0;
   private long nextRotationAt;
-  // Placeholder normalized locations: must be calibrated before enabling rotation.
   private final float[] heroSlotX = {0.93f, 0.93f, 0.93f, 0.93f};
   private final float[] heroSlotY = {0.24f, 0.34f, 0.44f, 0.54f};
+  private final Button[] heroMarkers = new Button[4];
+  private final WindowManager.LayoutParams[] heroMarkerParams = new WindowManager.LayoutParams[4];
+  private Button attackMarker;
+  private WindowManager.LayoutParams attackMarkerParams;
+  private boolean rotationCalibrated() {
+    for (int i = 0; i < 4; i++)
+      if (!getPreferences(MODE_PRIVATE).getBoolean("heroSet" + i + (screenW > screenH ? "L" : "P"), false)) return false;
+    return true;
+  }
+  private String heroKey(int i, String axis) { return "hero" + i + axis + (screenW > screenH ? "L" : "P"); }
+  private void loadHeroSlots() {
+    for (int i = 0; i < 4; i++) {
+      heroSlotX[i] = getPreferences(MODE_PRIVATE).getFloat(heroKey(i, "X"), 0.93f);
+      heroSlotY[i] = getPreferences(MODE_PRIVATE).getFloat(heroKey(i, "Y"), 0.24f + i * 0.10f);
+    }
+  }
   private long nextPeriodicDodgeAt;
   private long nextAttackAt;
   private long dodgePriorityUntil;
@@ -133,6 +148,20 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (windowManager == null) return;
     refreshScreen();
     if (running) stopCombat();
+    loadHeroSlots();
+    for (int i = 0; i < 4; i++) {
+      if (heroMarkers[i] != null) {
+        heroMarkerParams[i].x = Math.round(screenW * heroSlotX[i]) - heroMarkers[i].getWidth() / 2;
+        heroMarkerParams[i].y = Math.round(screenH * heroSlotY[i]) - heroMarkers[i].getHeight() / 2;
+        windowManager.updateViewLayout(heroMarkers[i], heroMarkerParams[i]);
+      }
+    }
+    if (attackMarker != null) {
+      String suffix = screenW > screenH ? "L" : "P";
+      attackMarkerParams.x = Math.round(screenW * getPreferences(MODE_PRIVATE).getFloat("attackX" + suffix, 0.83f)) - attackMarker.getWidth() / 2;
+      attackMarkerParams.y = Math.round(screenH * getPreferences(MODE_PRIVATE).getFloat("attackY" + suffix, 0.80f)) - attackMarker.getHeight() / 2;
+      windowManager.updateViewLayout(attackMarker, attackMarkerParams);
+    }
     if (joystickMarker != null && joystickMarkerParams != null) {
       joystickMarkerParams.x = Math.round(screenW * getPreferences(MODE_PRIVATE).getFloat("joystickX", 0.14f)) - joystickMarker.getWidth() / 2;
       joystickMarkerParams.y = Math.round(screenH * getPreferences(MODE_PRIVATE).getFloat("joystickY", 0.78f)) - joystickMarker.getHeight() / 2;
@@ -154,7 +183,7 @@ public class CombatAccessibilityService extends AccessibilityService {
         nextPeriodicDodgeAt = now + (survivalMode ? 1200L : 2000L);
         onIncomingAttackDetected();
       }
-      if (rotationEnabled && now >= nextRotationAt && !gestureInFlight && now >= dodgePriorityUntil) {
+      if (rotationEnabled && rotationCalibrated() && now >= nextRotationAt && !gestureInFlight && now >= dodgePriorityUntil) {
         rotationSlot = (rotationSlot + 1) % 4;
         tap(screenW * heroSlotX[rotationSlot], screenH * heroSlotY[rotationSlot]);
         nextRotationAt = now + 6500L;
@@ -191,7 +220,7 @@ public class CombatAccessibilityService extends AccessibilityService {
         refreshScreen();
         float fx = getPreferences(MODE_PRIVATE).getFloat(keyX(), 0.90f);
         float fy = getPreferences(MODE_PRIVATE).getFloat(keyY(), 0.88f);
-        startCombat(screenW * 0.83f, screenH * 0.80f,
+        startCombat(screenW * getPreferences(MODE_PRIVATE).getFloat("attackX" + (screenW > screenH ? "L" : "P"), 0.83f), screenH * getPreferences(MODE_PRIVATE).getFloat("attackY" + (screenW > screenH ? "L" : "P"), 0.80f),
                     screenW * fx, screenH * fy);
       }
     });
@@ -213,6 +242,8 @@ public class CombatAccessibilityService extends AccessibilityService {
       showDodgeTestButton();
       showSurvivalButton();
       showRotationButton();
+      showHeroMarkers();
+      showAttackMarker();
     } catch (RuntimeException e) {
       overlayButton = null;
     }
@@ -312,12 +343,95 @@ public class CombatAccessibilityService extends AccessibilityService {
     windowManager.addView(joystickMarker, joystickMarkerParams);
   }
 
+  private WindowManager.LayoutParams calibrationParams(float x, float y) {
+    WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+      WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+      PixelFormat.TRANSLUCENT);
+    p.gravity = Gravity.TOP | Gravity.LEFT;
+    p.x = Math.round(screenW * x) - 22;
+    p.y = Math.round(screenH * y) - 18;
+    return p;
+  }
+
+  private void attachDrag(Button b, WindowManager.LayoutParams p, Runnable save) {
+    b.setAlpha(0.45f);
+    b.setTextSize(10);
+    b.setAllCaps(false);
+    b.setPadding(4, 2, 4, 2);
+    b.setOnTouchListener(new View.OnTouchListener() {
+      float downX, downY;
+      int startX, startY;
+      @Override public boolean onTouch(View v, MotionEvent event) {
+        switch (event.getActionMasked()) {
+          case MotionEvent.ACTION_DOWN:
+            downX = event.getRawX(); downY = event.getRawY();
+            startX = p.x; startY = p.y;
+            return true;
+          case MotionEvent.ACTION_MOVE:
+            p.x = Math.max(0, Math.min(screenW - b.getWidth(), startX + Math.round(event.getRawX() - downX)));
+            p.y = Math.max(0, Math.min(screenH - b.getHeight(), startY + Math.round(event.getRawY() - downY)));
+            windowManager.updateViewLayout(b, p);
+            return true;
+          case MotionEvent.ACTION_UP:
+            save.run();
+            return true;
+          default: return true;
+        }
+      }
+    });
+    windowManager.addView(b, p);
+  }
+
+  private void showHeroMarkers() {
+    loadHeroSlots();
+    for (int i = 0; i < 4; i++) {
+      final int slot = i;
+      Button b = new Button(this);
+      b.setText("H" + (i + 1));
+      heroMarkers[i] = b;
+      WindowManager.LayoutParams p = calibrationParams(heroSlotX[i], heroSlotY[i]);
+      heroMarkerParams[i] = p;
+      attachDrag(b, p, () -> {
+        float x = (p.x + b.getWidth() / 2f) / screenW;
+        float y = (p.y + b.getHeight() / 2f) / screenH;
+        heroSlotX[slot] = x; heroSlotY[slot] = y;
+        getPreferences(MODE_PRIVATE).edit()
+          .putFloat(heroKey(slot, "X"), x).putFloat(heroKey(slot, "Y"), y)
+          .putBoolean("heroSet" + slot + (screenW > screenH ? "L" : "P"), true).apply();
+        Toast.makeText(this, "H" + (slot + 1) + " gespeichert", Toast.LENGTH_SHORT).show();
+      });
+    }
+  }
+
+  private void showAttackMarker() {
+    String suffix = screenW > screenH ? "L" : "P";
+    Button b = new Button(this);
+    b.setText("ANGRIFF");
+    attackMarker = b;
+    WindowManager.LayoutParams p = calibrationParams(
+      getPreferences(MODE_PRIVATE).getFloat("attackX" + suffix, 0.83f),
+      getPreferences(MODE_PRIVATE).getFloat("attackY" + suffix, 0.80f));
+    attackMarkerParams = p;
+    attachDrag(b, p, () -> {
+      getPreferences(MODE_PRIVATE).edit()
+        .putFloat("attackX" + suffix, (p.x + b.getWidth() / 2f) / screenW)
+        .putFloat("attackY" + suffix, (p.y + b.getHeight() / 2f) / screenH).apply();
+      Toast.makeText(this, "Angriff gespeichert", Toast.LENGTH_SHORT).show();
+    });
+  }
+
   private void showRotationButton() {
     rotationButton = new Button(this);
     rotationButton.setAllCaps(false);
     rotationButton.setAlpha(0.45f);
     rotationButton.setText("ROTATION AUS");
     rotationButton.setOnClickListener(v -> {
+      if (!rotationEnabled && !rotationCalibrated()) {
+        Toast.makeText(this, "Erst H1-H4 an die Charaktertasten ziehen", Toast.LENGTH_LONG).show();
+        return;
+      }
       rotationEnabled = !rotationEnabled;
       rotationSlot = 0;
       nextRotationAt = SystemClock.uptimeMillis() + 6500L;
@@ -403,6 +517,12 @@ public class CombatAccessibilityService extends AccessibilityService {
   @Override public void onDestroy() {
     stopDodgeTest();
     stopCombat();
+    if (windowManager != null) {
+      for (int i = 0; i < 4; i++) {
+        if (heroMarkers[i] != null) { windowManager.removeView(heroMarkers[i]); heroMarkers[i] = null; }
+      }
+      if (attackMarker != null) { windowManager.removeView(attackMarker); attackMarker = null; }
+    }
     if (windowManager != null && rotationButton != null) {
       windowManager.removeView(rotationButton);
       rotationButton = null;
@@ -452,6 +572,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.GONE);
     if (joystickMarker != null) joystickMarker.setVisibility(View.GONE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.GONE);
+    for (Button b : heroMarkers) if (b != null) b.setVisibility(View.GONE);
+    if (attackMarker != null) attackMarker.setVisibility(View.GONE);
     handler.post(loop);
     scheduleScan();
   }
@@ -463,6 +585,8 @@ public class CombatAccessibilityService extends AccessibilityService {
     if (dodgeMarker != null) dodgeMarker.setVisibility(View.VISIBLE);
     if (joystickMarker != null) joystickMarker.setVisibility(View.VISIBLE);
     if (dodgeTestButton != null) dodgeTestButton.setVisibility(View.VISIBLE);
+    for (Button b : heroMarkers) if (b != null) b.setVisibility(View.VISIBLE);
+    if (attackMarker != null) attackMarker.setVisibility(View.VISIBLE);
     updateOverlay();
   }
 
