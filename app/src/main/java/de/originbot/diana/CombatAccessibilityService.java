@@ -178,8 +178,9 @@ public class CombatAccessibilityService extends AccessibilityService {
       PixelFormat.TRANSLUCENT
     );
     params.gravity = Gravity.TOP | Gravity.LEFT;
-    params.x = 8;
-    params.y = 24;
+    // Place controls at top center, away from the game's top-left minimap.
+    params.x = Math.round(screenW * 0.40f);
+    params.y = 16;
     try {
       windowManager.addView(overlayButton, params);
       showDodgeMarker();
@@ -265,7 +266,8 @@ public class CombatAccessibilityService extends AccessibilityService {
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT);
     p.gravity = Gravity.TOP | Gravity.LEFT;
-    p.x = 8;
+    // Keep test control below the start button, outside the minimap.
+    p.x = Math.round(screenW * 0.40f);
     p.y = 110;
     windowManager.addView(dodgeTestButton, p);
   }
